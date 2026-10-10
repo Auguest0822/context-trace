@@ -1,0 +1,8 @@
+﻿{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "yanji-memory",
+  "version": "0.1.0",
+  "description": "Traceable long-term memory for AI agents (ContextTrace).",
+  "license": "Apache-2.0",
+  "keywords": ["agent-plugin", "memory", "context", "handoff", "mcp"]
+}

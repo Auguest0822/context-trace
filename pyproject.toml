@@ -1,0 +1,37 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "context-trace"
+version = "0.1.0"
+description = "言迹 ContextTrace —— 可追溯的 Agent 长期记忆层"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "Apache-2.0" }
+
+dependencies = [
+  "pyseekdb",
+  "pydantic>=2",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest",
+  "ruff",
+  "mypy",
+]
+mcp = [
+  "mcp",
+]
+
+[tool.setuptools.packages.find]
+where = ["python"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.mypy]
+python_version = "3.11"
+ignore_missing_imports = true
