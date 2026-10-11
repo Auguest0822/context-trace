@@ -1,0 +1,40 @@
+{
+  "scope": "project:context-trace",
+  "platform": "deepseek",
+  "external_conversation_id": null,
+  "title": "初赛部署与记忆提取讨论（模拟样例）",
+  "source_url": null,
+  "capture_method": "manual_import",
+  "capture_completeness": "selected",
+  "messages": [
+    {
+      "external_message_id": null,
+      "sequence": 1,
+      "role": "user",
+      "content": "初赛先保证评委从仓库能复现完整流程。腾讯云服务器只用于团队联调，不作为唯一运行环境。",
+      "sent_at": null
+    },
+    {
+      "external_message_id": null,
+      "sequence": 2,
+      "role": "assistant",
+      "content": "可以把本地启动命令、环境变量样例和 seekdb 初始化步骤写进 README；服务器只承担联调和临时测试。",
+      "sent_at": null
+    },
+    {
+      "external_message_id": null,
+      "sequence": 3,
+      "role": "user",
+      "content": "网页应先展示我主动保存的原始对话，再让我选择消息提炼记忆；不要在归档时自动保存记忆。",
+      "sent_at": null
+    },
+    {
+      "external_message_id": null,
+      "sequence": 4,
+      "role": "assistant",
+      "content": "流程可以分为对话归档、候选记忆预览、用户确认保存和记忆检索四步。",
+      "sent_at": null
+    }
+  ],
+  "client_request_id": "ac80b919-e2c5-4d7f-9011-77ef858dc449"
+}
