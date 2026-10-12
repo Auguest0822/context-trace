@@ -1,15 +1,17 @@
-# 言迹 ContextTrace：按功能分类的 API 与数据契约（v1 草案，待队长审查）
+# 言迹 ContextTrace：按功能分类的 API 与数据契约
 
 > 状态：**拟定，待人工审查**。本文固定前后端、浏览器扩展、Agent Plugin、Python 引擎之间的接口。当前仓库中的 `models.py`、`api.py`、`mcp_server.py` 尚未实现，本文描述目标行为，不代表这些接口已经可用。
 >
-> 范围：两周版本。HTTP 路径统一以 `/v1` 开头；MCP 工具复用同一业务逻辑。整体用户流程见 `project-workflow.md`。若修改字段或语义，先修订本文和示例，再让各端联调。
+> 范围：两周版本优先交付网页 + MCP；浏览器扩展在这条闭环通过验收后开发。扩展所需的归档字段先保留在契约中，但扩展本身不属于两周必做验收。HTTP 路径统一以 `/v1` 开头；MCP 工具复用同一业务逻辑。整体用户流程见 `project-workflow.md`。若修改字段或语义，先修订本文和示例，再让各端联调。
 
 ## 1. 系统边界与术语
 
 ```text
-浏览器扩展 / Web 控制台 ── HTTP JSON ──┐
+手动导入 / Web 控制台 ── HTTP JSON ─────┐
                                       ├─ Python 业务服务 ── seekdb
 Agent 宿主 ── MCP 工具/宿主适配 ────────┘
+
+后续浏览器扩展也调用上述 HTTP 归档与检索接口。
 ```
 
 - **对话**：由用户确认归档的一组消息，记录来源平台和采集完整度；不等同于记忆。
@@ -206,14 +208,14 @@ HTTP 成功返回业务 JSON，错误统一为：
 | 功能组 | 用户想做什么 | 页面/调用方 | 接口 |
 | --- | --- | --- | --- |
 | 系统状态 | 确认后端和数据库可用 | 顶部连接状态、部署检查 | `GET /healthz`、`GET /readyz` |
-| 对话档案 | 保存选定聊天、查看或删除原始记录 | 浏览器扩展、对话首页/详情、Agent 导出适配 | `POST /v1/conversations`、`POST /v1/conversations/{id}/messages`、`GET /v1/conversations`、`GET /v1/conversations/{id}`、`GET /v1/conversations/{id}/messages`、`DELETE /v1/conversations/{id}` |
+| 对话档案 | 保存选定聊天、查看或删除原始记录 | 手动导入、对话首页/详情、Agent 导出适配；后续浏览器扩展 | `POST /v1/conversations`、`POST /v1/conversations/{id}/messages`、`GET /v1/conversations`、`GET /v1/conversations/{id}`、`GET /v1/conversations/{id}/messages`、`DELETE /v1/conversations/{id}` |
 | 形成记忆 | 从选中消息预览候选并由用户确认，或直接写入一条记忆 | 对话详情、记忆库、Agent 工具 | `POST /v1/extractions/preview`、`POST /v1/extractions/{preview_id}/commit`、`POST /v1/memories` |
 | 查看记忆 | 按来源、类别和状态浏览已确认内容 | 记忆库、对话详情 | `GET /v1/memories`、`GET /v1/memories/{id}` |
-| 找回并使用记忆 | 按问题和范围搜索；由用户决定最终交给 AI 的内容 | 记忆检索页、浏览器扩展、Agent 工具 | `POST /v1/memories/search`、`POST /v1/memories/context`、`POST /v1/memories/handoff` |
+| 找回并使用记忆 | 按问题和范围搜索；由用户决定最终交给 AI 的内容 | 记忆检索页、Agent 工具；后续浏览器扩展 | `POST /v1/memories/search`、`POST /v1/memories/context`、`POST /v1/memories/handoff` |
 | 解释结果 | 查看某次搜索的候选、排名和预算取舍 | 召回记录页 | `GET /v1/traces`、`GET /v1/traces/{trace_id}` |
 | 更新与忘记 | 新决定替代旧决定；删除不应再保留的记忆 | 版本与冲突页、记忆详情 | `POST /v1/memories/reconcile`、`GET /v1/memories/{id}/history`、`DELETE /v1/memories/{id}` |
 
-**常用流程**：浏览器扩展调用“对话档案”→ 用户在对话详情调用“形成记忆”→ 网页或 Agent 调用“找回并使用记忆”→ 需要核查时调用“解释结果”。只有经确认的记忆会被搜索。
+**两周常用流程**：手动导入或可靠的宿主导出调用“对话档案”→ 用户在网页对话详情调用“形成记忆”→ 网页和 MCP Agent 调用“找回并使用记忆”→ 需要核查时调用“解释结果”。只有经确认的记忆会被搜索。扩展完成后可增加网页聊天页的归档入口。
 
 ### 4.1 系统状态：先确认服务能用
 
@@ -223,7 +225,7 @@ HTTP 成功返回业务 JSON，错误统一为：
 
 ### 4.2 对话档案：保存和查看用户选中的原始聊天
 
-“归档”指保留原文、平台、会话标题和消息顺序，方便以后在网页里找回。这里**不调用模型提炼记忆**。浏览器扩展只上传用户确认且当前网页实际可取得的消息；Agent 导出适配只上传宿主确实提供的消息。
+“归档”指保留原文、平台、会话标题和消息顺序，方便以后在网页里找回。这里**不调用模型提炼记忆**。两周版本由手动导入或可靠的 Agent 宿主导出提供消息；后续浏览器扩展只上传用户确认且当前网页实际可取得的消息。Agent 导出适配只上传宿主确实提供的消息。
 
 `POST /v1/conversations`：只归档用户本次确认的消息，**不自动提炼或写入记忆**。请求示例：
 
@@ -484,7 +486,7 @@ MCP 端点：`/mcp`，Streamable HTTP。工具输入使用与 HTTP 对应接口�
 
 Skill 只规定何时调用这些工具，不负责数据库连接，也不自动赋予访问宿主历史对话的权限。`conversation_capture` 只接收工具参数中的消息；若宿主没有可靠的会话导出或事件接口，Agent 接入仅提供记忆读写，完整对话归档需另走用户导出/手动导入。现有 `integrations/agent-plugin/skills/yanji-memory/SKILL.md` 中的调用说明应按本文同步更新。
 
-## 6. 前端与浏览器扩展约定
+## 6. 网页前端与后续浏览器扩展约定
 
 | 页面/能力 | 读取接口 | 写入接口 |
 | --- | --- | --- |
@@ -496,13 +498,13 @@ Skill 只规定何时调用这些工具，不负责数据库连接，也不自�
 | 压缩对比 | search 的 `selected_form`、`token_count`、`budget`，以及原记忆 `content`/`summary` | 无 |
 | 冲突档案 | `GET /v1/memories/{id}/history`，记忆的 `status` 与 `superseded_by` | `POST /v1/memories/reconcile` |
 | 成本看板 | 检索轨迹中的 Token 与耗时 | 无 |
-| 浏览器扩展 | 读取获授权当前网页的可见消息；按用户选择调用 search 并预览 `context_text` | 用户确认后调用 conversation 归档；需要提炼时调用 preview/commit；插入输入框不自动发送 |
+| 浏览器扩展（后续） | 读取获授权当前网页的可见消息；按用户选择调用 search 并预览 `context_text` | 用户确认后调用 conversation 归档；需要提炼时调用 preview/commit；插入输入框不自动发送 |
 
-浏览器扩展应为 DeepSeek、Kimi、豆包网页分别实现适配器。适配器只负责页面读取、来源定位和输入框插入；抽取、检索、冲突与压缩归 Python 服务。首版采用用户点击保存/提炼/插入的显式流程，**不自动上传整段聊天记录**。跨域来源白名单和认证方式由部署配置明确列出，不能使用任意来源的宽松 CORS 配置。
+浏览器扩展在网页 + MCP 闭环通过验收后开发，再为 DeepSeek、Kimi、豆包网页分别实现适配器。适配器只负责页面读取、来源定位和输入框插入；抽取、检索、冲突与压缩归 Python 服务。扩展采用用户点击保存/提炼/插入的显式流程，**不自动上传整段聊天记录**。跨域来源白名单和认证方式由部署配置明确列出，不能使用任意来源的宽松 CORS 配置。
 
 ## 7. 首版验收用例
 
-1. 从受支持网页明确选择两条消息，归档后对话列表与详情显示平台、标题、消息和 `capture_completeness`；归档本身不生成记忆。
+1. 从仓库样例手动导入至少两条消息，归档后网页对话列表与详情显示平台、标题、角色、消息和 `capture_completeness`；归档本身不生成记忆。
 2. 对选中消息生成候选，关闭预览不入库；确认一条候选后，记忆能指回原对话和消息，证据原文可核验。
 3. 从样例文档直接写入一条带 `source_ref`、`source_excerpt` 的记忆，读回字段一致；缺任一出处字段拒绝写入。
 4. 同一 `client_request_id` 重试不重复写入；相同 ID 配不同正文返回冲突；重复归档不会重复生成消息。
@@ -512,7 +514,7 @@ Skill 只规定何时调用这些工具，不负责数据库连接，也不自�
 8. 显式替代后旧记忆仍能在时间线查到，但默认检索只返回新记忆；失败时事务回滚。
 9. MCP 与 HTTP 调用同一业务逻辑；未提供消息的 Agent 宿主不能通过 MCP 凭空归档历史对话。
 10. 硬删除一条记忆或整段对话后，相应正文、embedding、证据和轨迹引用不可再读取。
-11. 在无腾讯云配置的干净环境中，从样例对话完成归档、选取、提炼、检索与溯源。
+11. 在无腾讯云配置、无浏览器扩展的干净环境中，从样例对话完成归档、网页选取/提炼/检索/溯源，并让 Agent 经 MCP 搜索到同一份记忆。
 
 ## 8. 与现有文件的关系及待审查决定
 
