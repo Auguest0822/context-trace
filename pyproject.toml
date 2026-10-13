@@ -12,6 +12,7 @@ license = { text = "Apache-2.0" }
 
 dependencies = [
   "pyseekdb",
+  "PyMySQL>=1.1,<2",
   "pydantic>=2",
 ]
 
@@ -27,6 +28,9 @@ mcp = [
 
 [tool.setuptools.packages.find]
 where = ["python"]
+
+[tool.setuptools.package-data]
+"yanji.store" = ["schema.sql"]
 
 [tool.ruff]
 line-length = 100
