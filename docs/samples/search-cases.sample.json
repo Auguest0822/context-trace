@@ -1,0 +1,75 @@
+[
+  {
+    "case_id": "keyword-deployment",
+    "phase": "D5",
+    "request": {
+      "scope": "project:context-trace",
+      "query": "初赛为什么优先保证仓库可复现？",
+      "mode": "keyword",
+      "top_k": 5,
+      "budget_tokens": 1200
+    },
+    "expected_include": ["local-first-deployment"]
+  },
+  {
+    "case_id": "keyword-budget-source",
+    "phase": "D5",
+    "request": {
+      "scope": "project:context-trace",
+      "query": "预算放不下正文时如何保留出处？",
+      "mode": "keyword",
+      "top_k": 5,
+      "budget_tokens": 1200
+    },
+    "expected_include": ["budget-preserves-source"]
+  },
+  {
+    "case_id": "keyword-scope-auth",
+    "phase": "D5",
+    "request": {
+      "scope": "project:context-trace",
+      "query": "scope 能当身份认证吗？",
+      "mode": "keyword",
+      "top_k": 5,
+      "budget_tokens": 1200
+    },
+    "expected_include": ["scope-is-not-auth"]
+  },
+  {
+    "case_id": "filter-kimi-excludes-deepseek-and-doc",
+    "phase": "D5",
+    "request": {
+      "scope": "project:context-trace",
+      "query": "初赛仓库可复现",
+      "mode": "keyword",
+      "top_k": 5,
+      "budget_tokens": 1200,
+      "filters": {"platforms": ["kimi"]}
+    },
+    "expected_exclude": ["local-first-deployment", "repo-reproducibility"]
+  },
+  {
+    "case_id": "scope-isolation",
+    "phase": "D5",
+    "request": {
+      "scope": "project:empty-fixture-scope",
+      "query": "仓库可复现",
+      "mode": "keyword",
+      "top_k": 5,
+      "budget_tokens": 1200
+    },
+    "expected_empty": true
+  },
+  {
+    "case_id": "hybrid-budget-paraphrase",
+    "phase": "D8",
+    "request": {
+      "scope": "project:context-trace",
+      "query": "上下文空间不够时怎样保持证据可追溯？",
+      "mode": "hybrid",
+      "top_k": 5,
+      "budget_tokens": 1200
+    },
+    "expected_include": ["budget-preserves-source"]
+  }
+]

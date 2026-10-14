@@ -35,9 +35,16 @@
 
 ```powershell
 python -m yanji.store.import_fixture data/fixtures/conversation-import.sample.json --prompt-password
+python -m yanji.store.import_fixture data/fixtures/conversation-import.kimi.sample.json --prompt-password
 ```
 
-预期显示一个对话 ID、`message_count=4` 和 `inserted_count=4`。同一文件再次运行返回首次结果，库里仍只有这四条消息；这一步不会提炼或写入记忆。数据层的代码阅读顺序和验证 SQL 见 [`data-layer-guide.md`](data-layer-guide.md)。
+首次导入分别应显示 `message_count=4` 和 `message_count=8`，共 12 条虚构消息。每个文件原样重试均返回首次结果，不重复插入；这一步不会提炼或写入记忆。静态样例与证据校验命令：
+
+```powershell
+python -m unittest discover -s python/tests -p test_fixture_contract.py -v
+```
+
+数据层的代码阅读顺序和验证 SQL 见 [`data-layer-guide.md`](data-layer-guide.md)；记忆候选与检索问题的用途见 [`samples/README.md`](samples/README.md)。
 
 ## 完整 Demo 与评测
 

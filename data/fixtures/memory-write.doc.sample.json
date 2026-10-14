@@ -1,0 +1,13 @@
+{
+  "scope": "project:context-trace",
+  "kind": "decision",
+  "content": "初赛优先保证仓库可复现。",
+  "summary": "仓库可复现优先。",
+  "importance": 0.8,
+  "source_type": "doc",
+  "source_ref": "docs/deployment-and-evaluation.md#一、结论",
+  "source_excerpt": "仓库可复现性优先于服务器持续在线。",
+  "valid_from": null,
+  "valid_to": null,
+  "client_request_id": "58e58c1c-55d0-42c1-a964-dc1b20a53d4a"
+}
