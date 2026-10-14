@@ -29,6 +29,16 @@
 
 若不希望每次输入密码，可由运行环境提供 `SEEKDB_PASSWORD`；不要将真实密码提交到仓库。`.env.example` 只是变量模板，程序不会自动读取 `.env`。
 
+## 导入原始对话样例
+
+建表后在仓库根目录运行：
+
+```powershell
+python -m yanji.store.import_fixture data/fixtures/conversation-import.sample.json --prompt-password
+```
+
+预期显示一个对话 ID、`message_count=4` 和 `inserted_count=4`。同一文件再次运行返回首次结果，库里仍只有这四条消息；这一步不会提炼或写入记忆。数据层的代码阅读顺序和验证 SQL 见 [`data-layer-guide.md`](data-layer-guide.md)。
+
 ## 完整 Demo 与评测
 
 HTTP、MCP 和网页的端到端复现命令将在对应实现完成后补充；目前建库成功不代表业务接口已可用。
