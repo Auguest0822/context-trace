@@ -1,0 +1,68 @@
+{
+  "scope": "project:context-trace",
+  "platform": "kimi",
+  "external_conversation_id": null,
+  "title": "记忆检索与上下文选择讨论（模拟样例）",
+  "source_url": null,
+  "capture_method": "manual_import",
+  "capture_completeness": "selected",
+  "messages": [
+    {
+      "external_message_id": null,
+      "sequence": 1,
+      "role": "user",
+      "content": "这个项目检索时只看当前项目 scope 内已确认且有效的记忆。候选记忆没有确认前不能进入检索，也不能交给 Agent。",
+      "sent_at": null
+    },
+    {
+      "external_message_id": null,
+      "sequence": 2,
+      "role": "assistant",
+      "content": "可以在搜索前按 scope 和状态过滤，再组合关键词与向量结果。",
+      "sent_at": null
+    },
+    {
+      "external_message_id": null,
+      "sequence": 3,
+      "role": "user",
+      "content": "网页搜索结果先展示摘要、来源平台和原始出处，我勾选后才组成给 Agent 的上下文；取消勾选的记忆不能加入。",
+      "sent_at": null
+    },
+    {
+      "external_message_id": null,
+      "sequence": 4,
+      "role": "assistant",
+      "content": "可以做勾选列表，并在预算不足时给出压缩或跳过原因。",
+      "sent_at": null
+    },
+    {
+      "external_message_id": null,
+      "sequence": 5,
+      "role": "user",
+      "content": "预算放不下正文时先尝试摘要；摘要仍放不下就跳过，绝不能截掉出处。",
+      "sent_at": null
+    },
+    {
+      "external_message_id": null,
+      "sequence": 6,
+      "role": "assistant",
+      "content": "我会记录每条记忆的使用形式、Token 数以及排除原因。",
+      "sent_at": null
+    },
+    {
+      "external_message_id": null,
+      "sequence": 7,
+      "role": "user",
+      "content": "检索轨迹必须记录关键词与向量候选、融合排名和预算取舍；网页只显示真实记录，不要编造召回解释。",
+      "sent_at": null
+    },
+    {
+      "external_message_id": null,
+      "sequence": 8,
+      "role": "assistant",
+      "content": "明白，召回回放只使用实际轨迹字段。",
+      "sent_at": null
+    }
+  ],
+  "client_request_id": "d8c9cfa3-1b5a-4f5f-9030-c88709928722"
+}
