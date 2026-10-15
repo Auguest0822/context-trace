@@ -19,8 +19,10 @@ from fastapi.responses import JSONResponse
 from pydantic import AwareDatetime
 from pymysql.err import IntegrityError, InterfaceError, OperationalError
 
-from yanji.models import ConversationInput, MessageAppendInput
-from yanji.store import repo
+from yanji.models import (
+    ConversationInput, ExtractionCommitInput, ExtractionPreviewInput, MessageAppendInput,
+)
+from yanji.store import memory_repo, repo
 from yanji.store.client import check_connection
 
 logger = logging.getLogger(__name__)
@@ -41,6 +43,7 @@ app.add_middleware(
 
 Scope = Annotated[str, Query(min_length=1, max_length=128)]
 ConversationId = Annotated[str, Path(pattern=r"^[1-9][0-9]*$")]
+PreviewId = Annotated[str, Path(pattern=r"^[0-9a-fA-F-]{36}$")]
 Platform = Literal["deepseek", "kimi", "doubao", "agent", "other"]
 
 
@@ -100,6 +103,11 @@ async def idempotency_conflict(request: Request, exc: repo.IdempotencyConflict) 
 @app.exception_handler(repo.StateConflict)
 async def state_conflict(request: Request, exc: repo.StateConflict) -> JSONResponse:
     return _error(request, 409, "STATE_CONFLICT", str(exc))
+
+
+@app.exception_handler(memory_repo.PreviewExpired)
+async def preview_expired(request: Request, exc: memory_repo.PreviewExpired) -> JSONResponse:
+    return _error(request, 410, "PREVIEW_EXPIRED", str(exc))
 
 
 @app.exception_handler(IntegrityError)
@@ -201,3 +209,25 @@ def list_messages(
 ) -> dict[str, Any]:
     _reject_unknown_query(request, {"scope", "limit", "cursor"})
     return repo.list_messages(_check_scope(scope), conversation_id, limit=limit, cursor=cursor)
+
+
+@app.post("/v1/extractions/preview")
+def preview_extraction(request: Request, data: ExtractionPreviewInput) -> dict[str, Any]:
+    _reject_unknown_query(request, set())
+    return memory_repo.create_manual_preview(data)
+
+
+@app.post("/v1/extractions/{preview_id}/commit")
+def commit_extraction(
+    request: Request, preview_id: PreviewId, data: ExtractionCommitInput
+) -> JSONResponse:
+    _reject_unknown_query(request, set())
+    result = memory_repo.commit_manual_preview(preview_id, data)
+    created = result.pop("created")
+    return JSONResponse(status_code=201 if created else 200, content=result)
+
+
+@app.get("/v1/memories/{memory_id}")
+def get_memory(request: Request, memory_id: ConversationId, scope: Scope) -> dict[str, Any]:
+    _reject_unknown_query(request, {"scope"})
+    return {"memory": memory_repo.get_memory(_check_scope(scope), memory_id)}

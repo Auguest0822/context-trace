@@ -1,5 +1,5 @@
 <script setup>
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 import { useRoute } from 'vue-router'
 import { store } from '../store'
 
@@ -8,6 +8,12 @@ const route = useRoute()
 const projectLabel = ref(route.meta.nav === 'archive' ? '项目：ContextTrace' : '工作空间：产品研发')
 const projectOpen = ref(false)
 const projects = ['项目：ContextTrace', '工作空间：产品研发']
+const archiveStatusText = computed(() => ({
+  mock: '演示数据 · 未连接数据库',
+  checking: '正在连接 · 对话 API',
+  ready: '已连接 · 对话 API',
+  error: '读取失败 · 对话 API'
+}[store.archiveStatus]))
 
 function pickProject(p) {
   projectLabel.value = p
@@ -44,8 +50,8 @@ function pickProject(p) {
       </div>
 
       <div class="conn-status">
-        <span class="dot"></span>
-        <span>已连接 · 本地记忆库</span>
+        <span class="dot" :class="{ muted: store.archiveStatus !== 'ready' }"></span>
+        <span>{{ archiveStatusText }}</span>
       </div>
     </div>
 
@@ -132,6 +138,7 @@ function pickProject(p) {
   background: var(--green-dot);
   box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.15);
 }
+.dot.muted { background: #94a3b8; box-shadow: 0 0 0 3px rgba(148, 163, 184, 0.14); }
 
 .right { display: flex; align-items: center; gap: 14px; }
 .api-btn {
