@@ -46,6 +46,38 @@ python -m unittest discover -s python/tests -p test_fixture_contract.py -v
 
 数据层的代码阅读顺序和验证 SQL 见 [`data-layer-guide.md`](data-layer-guide.md)；记忆候选与检索问题的用途见 [`samples/README.md`](samples/README.md)。
 
+## 启动对话档案 HTTP API
+
+先按上文配置 seekdb 连接环境变量，并在启动服务的终端提供 `SEEKDB_PASSWORD`。然后从仓库根目录运行：
+
+```powershell
+python -m uvicorn yanji.server.api:app --host 127.0.0.1 --port 8000
+```
+
+打开 `http://127.0.0.1:8000/docs` 可查看交互式接口文档。另开终端验证进程与数据库：
+
+```powershell
+Invoke-RestMethod http://127.0.0.1:8000/healthz
+Invoke-RestMethod http://127.0.0.1:8000/readyz
+```
+
+导入一段样例对话，再按 scope 读取对话列表：
+
+```powershell
+$sample = Get-Content data/fixtures/conversation-import.sample.json -Raw -Encoding UTF8
+Invoke-RestMethod -Method Post -Uri http://127.0.0.1:8000/v1/conversations -ContentType 'application/json; charset=utf-8' -Body $sample
+Invoke-RestMethod 'http://127.0.0.1:8000/v1/conversations?scope=project%3Acontext-trace'
+```
+
+首次创建返回 201；同一 `client_request_id` 原样重试会返回首次响应，不重复写入。详情和消息列表使用返回的十进制字符串 `conversation.id`，并在查询参数中继续传同一 `scope`。本地 Vite 页面默认允许从 `http://localhost:5173` 或 `http://127.0.0.1:5173` 调用 API；其他前端地址可用 `YANJI_CORS_ORIGINS` 配置为逗号分隔的源地址。
+
+HTTP 层的本地测试命令：
+
+```powershell
+python -m pip install -e '.[dev]'
+python -m unittest discover -s python/tests -v
+```
+
 ## 完整 Demo 与评测
 
-HTTP、MCP 和网页的端到端复现命令将在对应实现完成后补充；目前建库成功不代表业务接口已可用。
+MCP 和网页的端到端复现命令将在对应实现完成后补充；当前 HTTP 层仅覆盖对话归档与读取。
