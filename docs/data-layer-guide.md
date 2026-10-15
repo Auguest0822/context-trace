@@ -43,9 +43,9 @@ SELECT COUNT(*) FROM memories WHERE scope = 'project:context-trace';
 
 第三条用于确认归档过程没有创建记忆；若以前已经手工写过记忆，比较导入前后的数量即可。
 
-## 3. 你接下来亲手完成的 HTTP 层
+## 3. 已实现的对话档案 HTTP 层
 
-在 `python/yanji/server/api.py` 中只做参数接收和错误映射，直接调用仓储函数，不再写第二套 SQL：
+`python/yanji/server/api.py` 负责参数接收和错误映射，直接调用仓储函数，没有第二套 SQL：
 
 | HTTP 路由 | 调用的函数 | 成功结果 |
 | --- | --- | --- |
@@ -55,7 +55,7 @@ SELECT COUNT(*) FROM memories WHERE scope = 'project:context-trace';
 | `GET /v1/conversations/{id}` | `get_conversation` | 对话详情 |
 | `GET /v1/conversations/{id}/messages` | `list_messages` | 按顺序分页的消息 |
 
-将输入校验异常映射为 `VALIDATION_ERROR`，`NotFound` 映射为 404，`StateConflict` 和 `IdempotencyConflict` 映射为 409。所有列表和详情都必须传 `scope`。接口的完整请求与响应见 [`api-data-contract.md`](api-data-contract.md)。
+输入校验异常映射为 `VALIDATION_ERROR`，`NotFound` 映射为 404，`StateConflict` 和 `IdempotencyConflict` 映射为 409。所有列表和详情都必须传 `scope`。接口的完整请求与响应见 [`api-data-contract.md`](api-data-contract.md)，启动与调用命令见 [`reproduction.md`](reproduction.md)。
 
 ## 4. 验收时重点看什么
 
