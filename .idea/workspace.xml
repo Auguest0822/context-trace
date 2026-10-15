@@ -5,12 +5,15 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="8ab922f4-bb00-438c-8955-391045c926fd" name="更改" comment="">
-      <change beforePath="$PROJECT_DIR$/.idea/context-trace.iml" beforeDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/data-layer-guide.md" beforeDir="false" afterPath="$PROJECT_DIR$/docs/data-layer-guide.md" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/reproduction.md" beforeDir="false" afterPath="$PROJECT_DIR$/docs/reproduction.md" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/pyproject.toml" beforeDir="false" afterPath="$PROJECT_DIR$/pyproject.toml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/python/yanji/server/api.py" beforeDir="false" afterPath="$PROJECT_DIR$/python/yanji/server/api.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/web/.gitignore" beforeDir="false" afterPath="$PROJECT_DIR$/web/.gitignore" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/web/README.md" beforeDir="false" afterPath="$PROJECT_DIR$/web/README.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/web/env.d.ts" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/web/src/main.ts" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/web/tsconfig.app.json" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/web/tsconfig.json" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/web/tsconfig.node.json" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/web/vite.config.ts" beforeDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -23,9 +26,77 @@
   <component name="Git.Settings">
     <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$" />
   </component>
+  <component name="GithubPullRequestsUISettings"><![CDATA[{
+  "selectedUrlAndAccountId": {
+    "url": "https://github.com/Auguest0822/context-trace.git",
+    "accountId": "567723d0-e87e-4ee5-8a2d-a4a013e0e61d"
+  }
+}]]></component>
   <component name="McpProjectServerCommands">
     <commands />
     <urls />
+  </component>
+  <component name="NextEditCompletionFeaturesState">
+    <decayedCancelled>
+      <entry key="MS100" value="1.3634931293300776" />
+      <entry key="MS500" value="1.8170587526114481" />
+      <entry key="S2" value="2.2943482411106686" />
+      <entry key="S5" value="3.984224464642246" />
+      <entry key="S10" value="6.073771440598424" />
+      <entry key="S30" value="8.853135242647923" />
+      <entry key="S60" value="9.874656912507614" />
+      <entry key="M2" value="10.750680338548978" />
+      <entry key="M5" value="13.954217314842284" />
+      <entry key="M10" value="18.679198075149955" />
+      <entry key="M15" value="21.547010207741025" />
+      <entry key="M30" value="25.508897757438138" />
+      <entry key="H1" value="28.029976894872966" />
+      <entry key="H2" value="29.454063743323584" />
+      <entry key="H4" value="30.211154471670426" />
+      <entry key="D1" value="30.866263449114815" />
+      <entry key="W1" value="30.980838615008068" />
+    </decayedCancelled>
+    <decayedSelected>
+      <entry key="MS100" value="0.0" />
+      <entry key="MS500" value="0.0" />
+      <entry key="S2" value="7.346985031649516E-130" />
+      <entry key="S5" value="2.2204636195542575E-52" />
+      <entry key="S10" value="1.4901220149887923E-26" />
+      <entry key="S30" value="2.4607865459124538E-9" />
+      <entry key="S60" value="4.960631558493789E-5" />
+      <entry key="M2" value="0.007043175106792239" />
+      <entry key="M5" value="0.137755007379213" />
+      <entry key="M10" value="0.3711536169555849" />
+      <entry key="M15" value="0.5164589383100238" />
+      <entry key="M30" value="0.7186507763232592" />
+      <entry key="H1" value="0.8477327269388976" />
+      <entry key="H2" value="0.9207240232224296" />
+      <entry key="H4" value="0.9595436536304268" />
+      <entry key="D1" value="0.9931407215920006" />
+      <entry key="W1" value="0.9990172101987945" />
+    </decayedSelected>
+    <decayedShown>
+      <entry key="MS100" value="1.2779734619044207" />
+      <entry key="MS500" value="1.7894804873566506" />
+      <entry key="S2" value="2.2854214401880073" />
+      <entry key="S5" value="3.9781543261371173" />
+      <entry key="S10" value="6.069214083714513" />
+      <entry key="S30" value="8.850946597154104" />
+      <entry key="S60" value="9.873485415552514" />
+      <entry key="M2" value="10.756805764357876" />
+      <entry key="M5" value="14.0895755687986" />
+      <entry key="M10" value="19.047325976519353" />
+      <entry key="M15" value="22.060689203364486" />
+      <entry key="M30" value="26.22562598824482" />
+      <entry key="H1" value="28.876577901142973" />
+      <entry key="H2" value="30.374173649792805" />
+      <entry key="H4" value="31.170378225781185" />
+      <entry key="D1" value="31.85934900107296" />
+      <entry key="W1" value="31.979847897517597" />
+    </decayedShown>
+  </component>
+  <component name="PackageJsonUpdateNotifier">
+    <dismissed value="$PROJECT_DIR$/web/package.json" />
   </component>
   <component name="ProjectColorInfo">{
   &quot;associatedIndex&quot;: 4,
@@ -36,27 +107,27 @@
     <option name="hideEmptyMiddlePackages" value="true" />
     <option name="showLibraryContents" value="true" />
   </component>
-  <component name="PropertiesComponent"><![CDATA[{
-  "keyToString": {
-    "ModuleVcsDetector.initialDetectionPerformed": "true",
-    "RunOnceActivity.MCP Project settings loaded": "true",
-    "RunOnceActivity.ShowReadmeOnStart": "true",
-    "RunOnceActivity.TerminalTabsStorage.copyFrom.TerminalArrangementManager.252": "true",
-    "RunOnceActivity.git.unshallow": "true",
-    "RunOnceActivity.typescript.service.memoryLimit.init": "true",
-    "codeWithMe.voiceChat.enabledByDefault": "false",
-    "com.intellij.ml.llm.matterhorn.ej.ui.settings.DefaultModelSelectionForGA.v1": "true",
-    "git-widget-placeholder": "python-DB-evaluation",
-    "junie.onboarding.icon.badge.shown": "true",
-    "last_opened_file_path": "E:/competition/context-trace",
-    "node.js.detected.package.eslint": "true",
-    "node.js.detected.package.tslint": "true",
-    "node.js.selected.package.eslint": "(autodetect)",
-    "node.js.selected.package.tslint": "(autodetect)",
-    "nodejs_package_manager_path": "npm",
-    "to.speed.mode.migration.done": "true"
+  <component name="PropertiesComponent">{
+  &quot;keyToString&quot;: {
+    &quot;ModuleVcsDetector.initialDetectionPerformed&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.MCP Project settings loaded&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.ShowReadmeOnStart&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.TerminalTabsStorage.copyFrom.TerminalArrangementManager.252&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.git.unshallow&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.typescript.service.memoryLimit.init&quot;: &quot;true&quot;,
+    &quot;codeWithMe.voiceChat.enabledByDefault&quot;: &quot;false&quot;,
+    &quot;com.intellij.ml.llm.matterhorn.ej.ui.settings.DefaultModelSelectionForGA.v1&quot;: &quot;true&quot;,
+    &quot;git-widget-placeholder&quot;: &quot;python-DB-evaluation&quot;,
+    &quot;junie.onboarding.icon.badge.shown&quot;: &quot;true&quot;,
+    &quot;last_opened_file_path&quot;: &quot;E:/competition/context-trace&quot;,
+    &quot;node.js.detected.package.eslint&quot;: &quot;true&quot;,
+    &quot;node.js.detected.package.tslint&quot;: &quot;true&quot;,
+    &quot;node.js.selected.package.eslint&quot;: &quot;(autodetect)&quot;,
+    &quot;node.js.selected.package.tslint&quot;: &quot;(autodetect)&quot;,
+    &quot;nodejs_package_manager_path&quot;: &quot;npm&quot;,
+    &quot;to.speed.mode.migration.done&quot;: &quot;true&quot;
   }
-}]]></component>
+}</component>
   <component name="SharedIndexes">
     <attachedChunks>
       <set>
