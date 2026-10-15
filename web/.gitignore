@@ -7,11 +7,13 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
-node_modules
+# npm install dependencies. Keep package-lock.json in Git for reproducible installs.
+node_modules/
+.npm-cache/
 .DS_Store
-dist
-dist-ssr
-coverage
+dist/
+dist-ssr/
+coverage/
 *.local
 
 # Editor directories and files

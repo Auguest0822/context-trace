@@ -13,11 +13,17 @@
 
 ## 运行
 
-```bash
-npm install
-npm run dev      # http://localhost:5180
-npm run build    # 生产构建
+在仓库根目录执行：
+
+```powershell
+cd web
+npm ci
+npm run dev
 ```
+
+浏览器打开终端显示的地址，当前默认是 `http://localhost:5180/#/archive`。验证生产构建可运行 `npm run build`。
+
+`web/src/`、`package.json` 和 `package-lock.json` 都需要提交到 Git。`node_modules/`、`.npm-cache/` 和 `dist/` 是本机生成的内容，已被 `.gitignore` 忽略；队友拉取代码后运行 `npm ci` 即可根据锁文件安装同一套依赖。切换分支或拉取到更新后的 `package-lock.json` 时，先停止旧的开发服务器，再重新运行 `npm ci` 和 `npm run dev`。
 
 ## 核心交互流程
 
