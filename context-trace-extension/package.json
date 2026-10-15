@@ -1,0 +1,21 @@
+{
+  "name": "context-trace-extension",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "言迹 ContextTrace 浏览器扩展 — 在 AI 对话网站提取 / 检索记忆",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build && node scripts/postbuild.mjs"
+  },
+  "dependencies": {
+    "vue": "^3.4.0"
+  },
+  "devDependencies": {
+    "@types/chrome": "^0.3.5",
+    "@vitejs/plugin-vue": "^5.0.0",
+    "typescript": "^5.4.5",
+    "vite": "^5.2.0",
+    "vue-tsc": "^2.0.0"
+  }
+}
