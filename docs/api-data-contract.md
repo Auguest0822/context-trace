@@ -186,7 +186,7 @@ HTTP 成功返回业务 JSON，错误统一为：
 
 ### 3.3 内部存储字段
 
-`embedding`、`embedding_model`、`embedding_dim`、`client_request_id`、内部检索索引等只在存储层使用，不作为普通 HTTP 响应字段。embedding 由 Python 生成；模型与维度是部署配置，写入时校验维度与 `VECTOR(n)` 一致。更换维度需要新表或明确的数据迁移，不能混写。
+`embedding`、`embedding_model`、`embedding_dim`、`client_request_id`、内部检索索引等只在存储层使用，不作为普通 HTTP 响应字段。当前人工候选写入时 embedding 留空。接入向量能力后由 Python 生成 embedding；模型与维度是部署配置，写入时校验维度与 `VECTOR(n)` 一致。更换维度需要新表或明确的数据迁移，不能混写。
 
 首版至少有以下持久化对象：
 
@@ -258,7 +258,7 @@ HTTP 成功返回业务 JSON，错误统一为：
 
 ### 4.3 形成记忆：先预览候选，再由用户确认
 
-这一组负责把一段对话里的原话变成较短、可检索的结论。用户先勾选消息；系统给出候选；用户可以删掉或修改候选；点击确认后才写入 `memories`。前端不要在“预览成功”时显示“已保存”。
+这一组负责把已归档消息变成用户确认的记忆。当前先实现 `manual` 模式：后端逐条复制所选消息的原文片段作为**人工草稿**，用户选择类型、改写结论，再点击确认。它没有调用模型，也没有自动提炼；前端不得把草稿称作 AI 提炼结果。“预览成功”不等于“已保存”。自动提炼是后续能力，接入时需扩展此契约。
 
 `POST /v1/extractions/preview`：用户选择一段已归档对话中的消息后调用。请求：
 
@@ -266,11 +266,12 @@ HTTP 成功返回业务 JSON，错误统一为：
 {
   "scope": "project:context-trace",
   "conversation_id": "201",
-  "message_ids": ["301", "302"]
+  "message_ids": ["301", "302"],
+  "mode": "manual"
 }
 ```
 
-`message_ids` 为 1–50 个不重复 ID，必须均属于指定 scope 和同一 conversation。后端仅使用这些消息作为抽取输入，返回 200：
+`message_ids` 为 1–20 个不重复 ID，必须均属于指定 scope 和同一 conversation。`mode` 当前只接受 `manual`，省略时也按 `manual` 处理。后端仅使用这些消息作为草稿来源，返回 200：
 
 ```json
 {
@@ -281,9 +282,9 @@ HTTP 成功返回业务 JSON，错误统一为：
   "candidates": [
     {
       "candidate_id": "6c134d5a-12ab-4b1f-9899-777777777777",
-      "kind": "decision",
-      "content": "初赛优先保证仓库可复现。",
-      "summary": "优先仓库可复现。",
+      "kind": "fact",
+      "content": "初赛要以仓库可复现为优先。",
+      "summary": null,
       "source_message_ids": ["301"],
       "source_excerpt": "初赛要以仓库可复现为优先。"
     }
@@ -291,7 +292,7 @@ HTTP 成功返回业务 JSON，错误统一为：
 }
 ```
 
-候选可以为空；预览**不写入 `memories`，也不进入记忆检索**。候选的 `source_message_ids` 必须是本次选中的消息，`source_excerpt` 必须能在其中逐字找到。预览在服务端保留 24 小时，过期返回 `PREVIEW_EXPIRED`；保存候选证据时不新增超出选中范围的对话内容。模型或抽取服务不可用时返回 `EXTRACTION_UNAVAILABLE`，原始对话仍然已归档。
+人工模式每条所选消息产生一条草稿，默认类型 `fact`，`content` 和 `source_excerpt` 是消息开头最多 1000 字的逐字片段，`summary` 为 `null`。预览**不写入 `memories`，也不进入记忆检索**。候选的 `source_message_ids` 必须是本次选中的消息，`source_excerpt` 必须能在其中逐字找到。预览在服务端保留 24 小时，过期返回 `PREVIEW_EXPIRED`；保存候选证据时不新增超出选中范围的对话内容。人工模式无需模型 API；未来自动模式的失败语义另行约定。
 
 `POST /v1/extractions/{preview_id}/commit`：用户确认想保存的候选；请求：
 
@@ -305,7 +306,7 @@ HTTP 成功返回业务 JSON，错误统一为：
 }
 ```
 
-`selected` 可为 0–20 条；空数组表示放弃该预览并返回 200 `{"memories":[]}`。`candidate_id` 必须属于预览且不重复。用户可修改 `kind`、`content`、`summary`，但不能在确认请求中修改引用消息或证据片段；后端再次校验证据、生成 embedding，并在同一事务中保存全部选中记忆。成功返回 201 `{"memories":[<Memory>]}`；同一预览第二次用不同内容提交返回 `STATE_CONFLICT`，幂等重试返回首次结果。用户关闭预览而不确认时，不产生记忆。
+`selected` 可为 0–20 条；空数组表示放弃该预览并返回 200 `{"memories":[]}`。`candidate_id` 必须属于预览且不重复。用户可修改 `kind`、`content`、`summary`，但不能在确认请求中修改引用消息或证据片段；后端再次校验证据，并在同一事务中保存全部选中记忆及消息关联。**当前人工模式的 `embedding` 为 NULL，尚不能进行向量召回**；关键词检索可在后续接口接入。成功返回 201 `{"memories":[<Memory>]}`；同一预览第二次用不同内容提交返回 `STATE_CONFLICT`，幂等重试返回首次结果。用户关闭预览而不确认时，不产生记忆。
 
 ### 4.4 形成记忆：直接录入一条已有结论
 

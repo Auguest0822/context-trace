@@ -4,7 +4,8 @@ export const SOURCES = {
   DeepSeek: { name: 'DeepSeek', color: '#4D6BFE', text: 'D', type: 'letter' },
   Kimi: { name: 'Kimi', color: '#111111', text: 'K', type: 'letter' },
   豆包: { name: '豆包', color: '#F5455C', text: '豆', type: 'letter' },
-  Agent: { name: 'Agent', color: '#64748B', text: 'A', type: 'letter' }
+  Agent: { name: 'Agent', color: '#64748B', text: 'A', type: 'letter' },
+  其他: { name: '其他', color: '#64748B', text: '其', type: 'letter' }
 }
 
 export const FILTERS = [

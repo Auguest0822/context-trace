@@ -5,15 +5,21 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="8ab922f4-bb00-438c-8955-391045c926fd" name="更改" comment="">
+      <change afterPath="$PROJECT_DIR$/.idea/context-trace.iml" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/.idea/misc.xml" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/python/yanji/store/memory_repo.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/web/src/data/archiveApi.js" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/web/src/data/extractionApi.js" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/web/tests/archiveApi.test.js" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/web/.gitignore" beforeDir="false" afterPath="$PROJECT_DIR$/web/.gitignore" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/python/yanji/models.py" beforeDir="false" afterPath="$PROJECT_DIR$/python/yanji/models.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/python/yanji/server/api.py" beforeDir="false" afterPath="$PROJECT_DIR$/python/yanji/server/api.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/web/README.md" beforeDir="false" afterPath="$PROJECT_DIR$/web/README.md" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/web/env.d.ts" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/web/src/main.ts" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/web/tsconfig.app.json" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/web/tsconfig.json" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/web/tsconfig.node.json" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/web/vite.config.ts" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/web/src/components/TopBar.vue" beforeDir="false" afterPath="$PROJECT_DIR$/web/src/components/TopBar.vue" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/web/src/data/mock.js" beforeDir="false" afterPath="$PROJECT_DIR$/web/src/data/mock.js" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/web/src/store.js" beforeDir="false" afterPath="$PROJECT_DIR$/web/src/store.js" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/web/src/views/ArchiveView.vue" beforeDir="false" afterPath="$PROJECT_DIR$/web/src/views/ArchiveView.vue" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/web/src/views/MemoryExtractView.vue" beforeDir="false" afterPath="$PROJECT_DIR$/web/src/views/MemoryExtractView.vue" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -21,78 +27,84 @@
     <option name="LAST_RESOLUTION" value="IGNORE" />
   </component>
   <component name="EmbeddingIndexingInfo">
-    <option name="cachedIndexableFilesCount" value="82" />
+    <option name="cachedIndexableFilesCount" value="178" />
   </component>
   <component name="Git.Settings">
     <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$" />
   </component>
-  <component name="GithubPullRequestsUISettings"><![CDATA[{
-  "selectedUrlAndAccountId": {
-    "url": "https://github.com/Auguest0822/context-trace.git",
-    "accountId": "567723d0-e87e-4ee5-8a2d-a4a013e0e61d"
+  <component name="GitHubPullRequestSearchHistory">{
+  &quot;lastFilter&quot;: {
+    &quot;state&quot;: &quot;OPEN&quot;,
+    &quot;assignee&quot;: &quot;Auguest0822&quot;
   }
-}]]></component>
+}</component>
+  <component name="GithubPullRequestsUISettings">{
+  &quot;selectedUrlAndAccountId&quot;: {
+    &quot;url&quot;: &quot;https://github.com/Auguest0822/context-trace.git&quot;,
+    &quot;accountId&quot;: &quot;567723d0-e87e-4ee5-8a2d-a4a013e0e61d&quot;
+  }
+}</component>
   <component name="McpProjectServerCommands">
     <commands />
     <urls />
   </component>
   <component name="NextEditCompletionFeaturesState">
     <decayedCancelled>
-      <entry key="MS100" value="1.3634931293300776" />
-      <entry key="MS500" value="1.8170587526114481" />
-      <entry key="S2" value="2.2943482411106686" />
-      <entry key="S5" value="3.984224464642246" />
-      <entry key="S10" value="6.073771440598424" />
-      <entry key="S30" value="8.853135242647923" />
-      <entry key="S60" value="9.874656912507614" />
-      <entry key="M2" value="10.750680338548978" />
-      <entry key="M5" value="13.954217314842284" />
-      <entry key="M10" value="18.679198075149955" />
-      <entry key="M15" value="21.547010207741025" />
-      <entry key="M30" value="25.508897757438138" />
-      <entry key="H1" value="28.029976894872966" />
-      <entry key="H2" value="29.454063743323584" />
-      <entry key="H4" value="30.211154471670426" />
-      <entry key="D1" value="30.866263449114815" />
-      <entry key="W1" value="30.980838615008068" />
+      <entry key="MS100" value="1.1112403436166485" />
+      <entry key="MS500" value="2.120500551626919" />
+      <entry key="S2" value="4.063754759517083" />
+      <entry key="S5" value="7.202916869784117" />
+      <entry key="S10" value="9.472004521479281" />
+      <entry key="S30" value="11.644122664771366" />
+      <entry key="S60" value="12.296463596203607" />
+      <entry key="M2" value="12.641571245149667" />
+      <entry key="M5" value="12.868874561159027" />
+      <entry key="M10" value="13.643771530500826" />
+      <entry key="M15" value="15.711737862471914" />
+      <entry key="M30" value="23.854744378072244" />
+      <entry key="H1" value="34.79260441546659" />
+      <entry key="H2" value="43.94157385653" />
+      <entry key="H4" value="49.890125378396206" />
+      <entry key="D1" value="55.725116021296" />
+      <entry key="W1" value="56.815539994619684" />
     </decayedCancelled>
     <decayedSelected>
       <entry key="MS100" value="0.0" />
       <entry key="MS500" value="0.0" />
-      <entry key="S2" value="7.346985031649516E-130" />
-      <entry key="S5" value="2.2204636195542575E-52" />
-      <entry key="S10" value="1.4901220149887923E-26" />
-      <entry key="S30" value="2.4607865459124538E-9" />
-      <entry key="S60" value="4.960631558493789E-5" />
-      <entry key="M2" value="0.007043175106792239" />
-      <entry key="M5" value="0.137755007379213" />
-      <entry key="M10" value="0.3711536169555849" />
-      <entry key="M15" value="0.5164589383100238" />
-      <entry key="M30" value="0.7186507763232592" />
-      <entry key="H1" value="0.8477327269388976" />
-      <entry key="H2" value="0.9207240232224296" />
-      <entry key="H4" value="0.9595436536304268" />
-      <entry key="D1" value="0.9931407215920006" />
-      <entry key="W1" value="0.9990172101987945" />
+      <entry key="S2" value="0.0" />
+      <entry key="S5" value="3.3408668249598433E-196" />
+      <entry key="S10" value="2.2353682762315755E-98" />
+      <entry key="S30" value="4.277967804718698E-33" />
+      <entry key="S60" value="9.194386103721496E-17" />
+      <entry key="M2" value="1.357802055549558E-8" />
+      <entry key="M5" value="0.0011472854716334272" />
+      <entry key="M10" value="0.05470699475627957" />
+      <entry key="M15" value="0.20364909067274975" />
+      <entry key="M30" value="0.7727097404849212" />
+      <entry key="H1" value="1.5178272614138275" />
+      <entry key="H2" value="2.1321784294227566" />
+      <entry key="H4" value="2.5286222620266097" />
+      <entry key="D1" value="2.915653932887976" />
+      <entry key="W1" value="2.9878006954763734" />
     </decayedSelected>
     <decayedShown>
-      <entry key="MS100" value="1.2779734619044207" />
-      <entry key="MS500" value="1.7894804873566506" />
-      <entry key="S2" value="2.2854214401880073" />
-      <entry key="S5" value="3.9781543261371173" />
-      <entry key="S10" value="6.069214083714513" />
-      <entry key="S30" value="8.850946597154104" />
-      <entry key="S60" value="9.873485415552514" />
-      <entry key="M2" value="10.756805764357876" />
-      <entry key="M5" value="14.0895755687986" />
-      <entry key="M10" value="19.047325976519353" />
-      <entry key="M15" value="22.060689203364486" />
-      <entry key="M30" value="26.22562598824482" />
-      <entry key="H1" value="28.876577901142973" />
-      <entry key="H2" value="30.374173649792805" />
-      <entry key="H4" value="31.170378225781185" />
-      <entry key="D1" value="31.85934900107296" />
-      <entry key="W1" value="31.979847897517597" />
+      <entry key="MS100" value="1.0806088742138693" />
+      <entry key="MS500" value="2.107651142632338" />
+      <entry key="S2" value="4.045972804326021" />
+      <entry key="S5" value="7.186338272685672" />
+      <entry key="S10" value="9.46068318203947" />
+      <entry key="S30" value="11.639443297870505" />
+      <entry key="S60" value="12.2939924765823" />
+      <entry key="M2" value="12.640301300989004" />
+      <entry key="M5" value="12.869499617934435" />
+      <entry key="M10" value="13.69805254874544" />
+      <entry key="M15" value="15.91476225638564" />
+      <entry key="M30" value="24.626420957822926" />
+      <entry key="H1" value="36.309408301185" />
+      <entry key="H2" value="46.07302351136579" />
+      <entry key="H4" value="52.41831181250099" />
+      <entry key="D1" value="58.64068554760726" />
+      <entry key="W1" value="59.803328316582665" />
     </decayedShown>
   </component>
   <component name="PackageJsonUpdateNotifier">
