@@ -9,6 +9,7 @@ lerna-debug.log*
 
 # npm install dependencies. Keep package-lock.json in Git for reproducible installs.
 node_modules/
+.npm-cache/
 .DS_Store
 dist/
 dist-ssr/
