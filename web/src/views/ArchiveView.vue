@@ -1,26 +1,119 @@
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { store } from '../store'
 import { CONVERSATIONS, MESSAGES, FILTERS } from '../data/mock'
+import { loadConversations, loadConversationDetail, loadMessages } from '../data/archiveApi'
 import SourceBadge from '../components/SourceBadge.vue'
 
 const router = useRouter()
+const isApiArchive = import.meta.env.VITE_ARCHIVE_DATA_SOURCE === 'api'
+const apiConfig = {
+  baseUrl: import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000',
+  scope: import.meta.env.VITE_ARCHIVE_SCOPE || 'project:context-trace'
+}
 
 const activeFilter = ref('all')
 const keyword = ref('')
-const activeConvId = ref(1)
-const selectedMsgIds = ref(new Set([2, 3]))
+const conversations = ref(isApiArchive ? [] : CONVERSATIONS)
+const apiMessages = ref([])
+const activeConvId = ref(isApiArchive ? null : 1)
+const selectedMsgIds = ref(new Set(isApiArchive ? [] : [2, 3]))
+const loadingConversations = ref(false)
+const loadingMessages = ref(false)
+const listError = ref('')
+const detailError = ref('')
+let detailController = null
+
+const currentMessages = computed(() => isApiArchive ? apiMessages.value : MESSAGES)
+const filters = computed(() => {
+  if (!isApiArchive) return FILTERS
+  return [
+    { key: 'all', label: '全部', count: conversations.value.length },
+    ...['DeepSeek', 'Kimi', '豆包', 'Agent', '其他'].map(source => ({
+      key: source,
+      label: source,
+      count: conversations.value.filter(c => c.source === source).length
+    }))
+  ]
+})
 
 const filteredConvs = computed(() =>
-  CONVERSATIONS.filter(c => {
+  conversations.value.filter(c => {
     if (activeFilter.value !== 'all' && c.source !== activeFilter.value) return false
     if (keyword.value && !c.title.includes(keyword.value)) return false
     return true
   })
 )
 
-const activeConv = computed(() => CONVERSATIONS.find(c => c.id === activeConvId.value))
+const activeConv = computed(() => conversations.value.find(c => c.id === activeConvId.value))
+
+async function selectConversation(id) {
+  activeConvId.value = id
+  if (!isApiArchive) return
+  detailController?.abort()
+  const controller = new AbortController()
+  detailController = controller
+  apiMessages.value = []
+  selectedMsgIds.value = new Set()
+  detailError.value = ''
+  loadingMessages.value = true
+  store.archiveStatus = 'checking'
+  try {
+    const conversation = conversations.value.find(c => c.id === id)
+    const [detail, messages] = await Promise.all([
+      loadConversationDetail(apiConfig, id, controller.signal),
+      loadMessages(apiConfig, conversation, controller.signal)
+    ])
+    if (detailController !== controller) return
+    conversations.value = conversations.value.map(c => c.id === id ? detail : c)
+    apiMessages.value = messages
+    store.archiveStatus = 'ready'
+  } catch (error) {
+    if (error.name !== 'AbortError' && detailController === controller) {
+      detailError.value = error.message
+      store.archiveStatus = 'error'
+    }
+  } finally {
+    if (detailController === controller) loadingMessages.value = false
+  }
+}
+
+async function refreshArchive() {
+  if (!isApiArchive) return
+  detailController?.abort()
+  store.archiveStatus = 'checking'
+  loadingConversations.value = true
+  listError.value = ''
+  try {
+    const items = await loadConversations(apiConfig)
+    store.archiveStatus = 'ready'
+    conversations.value = items
+    const nextId = items.some(c => c.id === activeConvId.value)
+      ? activeConvId.value : items[0]?.id ?? null
+    activeConvId.value = nextId
+    if (nextId !== null) await selectConversation(nextId)
+    else {
+      apiMessages.value = []
+      selectedMsgIds.value = new Set()
+      detailError.value = ''
+      loadingMessages.value = false
+    }
+  } catch (error) {
+    store.archiveStatus = 'error'
+    listError.value = error.message
+    conversations.value = []
+    apiMessages.value = []
+    activeConvId.value = null
+    selectedMsgIds.value = new Set()
+    loadingMessages.value = false
+  } finally {
+    loadingConversations.value = false
+  }
+}
+
+onMounted(refreshArchive)
+onUnmounted(() => detailController?.abort())
 
 function toggleMsg(id) {
   const s = new Set(selectedMsgIds.value)
@@ -29,18 +122,20 @@ function toggleMsg(id) {
 }
 
 function toggleAll() {
-  if (selectedMsgIds.value.size === MESSAGES.length) {
+  if (selectedMsgIds.value.size === currentMessages.value.length) {
     selectedMsgIds.value = new Set()
   } else {
-    selectedMsgIds.value = new Set(MESSAGES.map(m => m.id))
+    selectedMsgIds.value = new Set(currentMessages.value.map(m => m.id))
   }
 }
 
 const selectedCount = computed(() => selectedMsgIds.value.size)
 
 function extractMemory() {
-  if (!selectedCount.value) return
-  store.selectedMessages = MESSAGES.filter(m => selectedMsgIds.value.has(m.id))
+  if (!selectedCount.value || (isApiArchive && (selectedCount.value > 20 || loadingMessages.value))) return
+  store.selectedMessages = currentMessages.value.filter(m => selectedMsgIds.value.has(m.id))
+  store.selectedConversationId = isApiArchive ? String(activeConv.value.id) : null
+  store.selectedConversationTitle = activeConv.value?.title || ''
   router.push('/extract')
 }
 </script>
@@ -56,7 +151,7 @@ function extractMemory() {
     <div class="filter-row">
       <div class="filter-tags">
         <button
-          v-for="f in FILTERS"
+          v-for="f in filters"
           :key="f.key"
           class="filter-tag"
           :class="{ active: activeFilter === f.key }"
@@ -85,14 +180,22 @@ function extractMemory() {
           <button class="filter-icon">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 3H2l8 9.46V19l4 2v-8.54L22 3z"/></svg>
           </button>
+          <button v-if="isApiArchive" class="reload-btn" :disabled="loadingConversations" @click="refreshArchive">刷新</button>
         </div>
+
+        <p v-if="loadingConversations" class="archive-state">正在读取对话…</p>
+        <div v-else-if="listError" class="archive-state archive-error">
+          <p>{{ listError }}</p>
+          <button @click="refreshArchive">重试</button>
+        </div>
+        <p v-else-if="!filteredConvs.length" class="archive-state">{{ conversations.length ? '没有匹配的对话' : '暂无归档对话' }}</p>
 
         <div
           v-for="c in filteredConvs"
           :key="c.id"
           class="conv-item"
           :class="{ active: c.id === activeConvId }"
-          @click="activeConvId = c.id"
+          @click="selectConversation(c.id)"
         >
           <div class="conv-top">
             <SourceBadge :source="c.source" :size="20" />
@@ -126,7 +229,8 @@ function extractMemory() {
             <p class="head-meta">{{ activeConv.createdAt }} · {{ activeConv.messageCount }} 条消息</p>
           </div>
           <div class="head-actions">
-            <button class="btn-ghost-teal save-btn" @click="store.showToast('已保存当前对话到档案')">
+            <span v-if="isApiArchive" class="archived-label">已归档</span>
+            <button v-else class="btn-ghost-teal save-btn" @click="store.showToast('已保存当前对话到档案')">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><path d="M17 21v-8H7v8M7 3v5h8"/></svg>
               保存当前对话
             </button>
@@ -137,7 +241,13 @@ function extractMemory() {
         </div>
 
         <div class="msg-list">
-          <div v-for="m in MESSAGES" :key="m.id" class="msg-row">
+          <p v-if="loadingMessages" class="archive-state">正在读取消息…</p>
+          <div v-else-if="detailError" class="archive-state archive-error">
+            <p>{{ detailError }}</p>
+            <button @click="selectConversation(activeConvId)">重试</button>
+          </div>
+          <p v-else-if="!currentMessages.length" class="archive-state">这段对话没有消息</p>
+          <div v-for="m in currentMessages" :key="m.id" class="msg-row">
             <div class="msg-side">
               <span
                 class="checkbox"
@@ -165,14 +275,15 @@ function extractMemory() {
         <div class="detail-foot">
           <div class="foot-info">
             <p class="foot-count">已选 {{ selectedCount }} 条消息</p>
-            <p class="foot-tip">可从选中内容提取记忆</p>
+            <p class="foot-tip">{{ isApiArchive ? '最多选择 20 条；进入人工候选预览' : '可从选中内容提取记忆' }}</p>
           </div>
-          <button class="btn-primary" :disabled="!selectedCount" @click="extractMemory">
+          <button class="btn-primary" :disabled="!selectedCount || (isApiArchive && (selectedCount > 20 || loadingMessages))" @click="extractMemory">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>
             提取记忆
           </button>
         </div>
       </div>
+      <div v-else-if="isApiArchive && !loadingConversations && !listError" class="conv-detail empty-detail">暂无可查看的对话</div>
     </div>
   </div>
 </template>
@@ -248,6 +359,13 @@ function extractMemory() {
   flex-direction: column;
   gap: 6px;
 }
+.archive-state { padding: 12px; color: var(--text-secondary); font-size: 13px; }
+.archive-error { color: #b42318; overflow-wrap: anywhere; }
+.archive-error button, .reload-btn { color: var(--primary); font-size: 12px; font-weight: 600; }
+.archive-error button { margin-top: 6px; }
+.reload-btn:disabled { opacity: 0.5; }
+.archived-label { color: var(--primary); font-size: 12px; }
+.empty-detail { align-items: center; justify-content: center; color: var(--text-tertiary); font-size: 13px; }
 .list-toolbar {
   display: flex;
   align-items: center;

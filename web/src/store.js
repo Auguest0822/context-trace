@@ -4,8 +4,13 @@ export const store = reactive({
   // 全局抽屉
   apiDrawerOpen: false,
 
+  // 对话档案的数据源状态；真实模式以归档接口的读取结果为准。
+  archiveStatus: import.meta.env.VITE_ARCHIVE_DATA_SOURCE === 'api' ? 'checking' : 'mock',
+
   // 从对话档案勾选、待提炼的消息
   selectedMessages: [],
+  selectedConversationId: null,
+  selectedConversationTitle: '',
 
   // 已确认保存的记忆
   savedMemories: [

@@ -12,6 +12,16 @@ dist/
 node_modules/
 *.local
 
+# JetBrains IDE files generated for an individual developer.
+/.idea/workspace.xml
+/.idea/*.iml
+/.idea/tasks.xml
+/.idea/usage.statistics.xml
+/.idea/shelf/
+/.idea/httpRequests/
+/.idea/dataSources/
+/.idea/dataSources.local.xml
+
 *.db
 *.sqlite
 data/private/
