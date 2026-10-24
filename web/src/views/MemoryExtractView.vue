@@ -152,7 +152,7 @@ async function confirmSave() {
           <span class="sep">/</span>
           <span class="current">{{ isApiArchive ? store.selectedConversationTitle : '初赛部署讨论' }}</span>
         </div>
-        <p class="sub">{{ isApiArchive ? '从选中消息建立逐字引用的人工草稿；请编辑、选择，再确认写入。这里没有 AI 自动提炼或向量生成。' : '基于选中的对话内容，生成候选记忆。请确认并选择需要保存的记忆。' }}</p>
+        <p class="sub">{{ isApiArchive ? '从选中消息建立逐字引用的人工草稿；请编辑、选择，再确认写入。人工草稿不调用 AI 模型。' : '基于选中的对话内容，生成候选记忆。请确认并选择需要保存的记忆。' }}</p>
       </div>
       <div class="head-hint">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>
@@ -165,7 +165,7 @@ async function confirmSave() {
 
     <p v-if="previewLoading" class="status-message">正在读取归档消息并创建预览…</p>
     <p v-if="errorText" class="status-message error">{{ errorText }}</p>
-    <p v-if="savedMemories.length" class="status-message success">已确认写入 seekdb：{{ savedMemories.map(memory => '#' + memory.id).join('、') }}。出处见下方；尚无向量 embedding。</p>
+    <p v-if="savedMemories.length" class="status-message success">已确认写入 seekdb：{{ savedMemories.map(memory => '#' + memory.id).join('、') }}。出处见下方；可前往记忆库查看和检索。</p>
     <p v-if="readbackWarning" class="status-message error">{{ readbackWarning }}</p>
     <div v-if="savedMemories.length" class="saved-list">
       <div v-for="memory in savedMemories" :key="memory.id" class="saved-item">
@@ -250,7 +250,7 @@ async function confirmSave() {
     <div class="foot-bar">
       <div class="foot-info">
         <p class="foot-count">已选 {{ selectedCount }} 条候选</p>
-        <p class="foot-tip">{{ isApiArchive ? '确认后写入 seekdb，并保留原始消息出处；当前不生成向量。' : '将保存到记忆库，可在记忆库中查看和编辑。' }}</p>
+        <p class="foot-tip">{{ isApiArchive ? '确认后写入 seekdb，并保留原始消息出处；向量检索取决于服务端配置。' : '将保存到记忆库，可在记忆库中查看和编辑。' }}</p>
       </div>
       <div class="foot-actions">
         <button class="btn-outline" @click="goBack">返回对话</button>

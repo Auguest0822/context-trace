@@ -7,15 +7,26 @@ the user must edit and explicitly confirm them. Vector generation is a later pha
 from __future__ import annotations
 
 import json
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Any
 from uuid import uuid4
 
-from yanji.models import ExtractionCommitInput, ExtractionPreviewInput
+from yanji import embedding
+from yanji.models import (
+    ExtractionCommitInput,
+    ExtractionPreviewInput,
+    MemoryWriteInput,
+    utc_database_time,
+)
 from yanji.store.client import connect
 from yanji.store.repo import (
-    NotFound, StateConflict, _claim_request, _remember_response, _row_for_conversation,
-    _timestamp, _transaction,
+    NotFound,
+    StateConflict,
+    _claim_request,
+    _remember_response,
+    _row_for_conversation,
+    _timestamp,
+    _transaction,
 )
 
 
@@ -63,7 +74,7 @@ def _memory(row: dict[str, Any], message_ids: list[str]) -> dict[str, Any]:
         "superseded_by": str(row["superseded_by"]) if row["superseded_by"] else None,
         "source_type": row["source_type"], "source_ref": row["source_ref"],
         "source_excerpt": row["source_excerpt"], "source_platform": row["source_platform"],
-        "conversation_id": str(row["conversation_id"]),
+        "conversation_id": str(row["conversation_id"]) if row["conversation_id"] is not None else None,
         "source_message_ids": message_ids,
         "valid_from": _timestamp(row["valid_from"]),
         "valid_to": _timestamp(row["valid_to"]),
@@ -74,49 +85,113 @@ def _memory(row: dict[str, Any], message_ids: list[str]) -> dict[str, Any]:
 
 def get_memory(scope: str, memory_id: str) -> dict[str, Any]:
     """Read a confirmed memory with its archived message references."""
-    with connect() as connection:
-        with connection.cursor() as cursor:
-            cursor.execute("SELECT * FROM memories WHERE id = %s AND scope = %s",
-                           (memory_id, scope))
-            row = cursor.fetchone()
-            if row is None:
-                raise NotFound("memory not found in this scope")
-            cursor.execute(
-                "SELECT message_id FROM memory_message_links "
-                "WHERE memory_id = %s AND scope = %s ORDER BY message_id ASC",
-                (memory_id, scope),
+    with connect() as connection, connection.cursor() as cursor:
+        cursor.execute("SELECT * FROM memories WHERE id = %s AND scope = %s",
+                       (memory_id, scope))
+        row = cursor.fetchone()
+        if row is None:
+            raise NotFound("memory not found in this scope")
+        cursor.execute(
+            "SELECT message_id FROM memory_message_links "
+            "WHERE memory_id = %s AND scope = %s ORDER BY message_id ASC",
+            (memory_id, scope),
+        )
+        ids = [str(item["message_id"]) for item in cursor.fetchall()]
+        return _memory(row, ids)
+
+
+def write_memory(data: MemoryWriteInput | dict[str, Any]) -> dict[str, Any]:
+    """Write one confirmed memory, validating chat evidence against archived text."""
+    request = data if isinstance(data, MemoryWriteInput) else MemoryWriteInput.model_validate(data)
+    body = request.model_dump(mode="json", exclude={"client_request_id"})
+    request_id = str(request.client_request_id) if request.client_request_id else None
+    with _transaction() as connection, connection.cursor() as cursor:
+        cached = _claim_request(cursor, request.scope, request_id, "memory_write", body)
+        if cached is not None:
+            return {"memory": cached["memory"], "created": False}
+        conversation = None
+        message_ids = request.source_message_ids or []
+        source_ref = request.source_ref
+        cited_messages: dict[str, dict[str, Any]] = {}
+        if request.source_type == "chat":
+            assert request.conversation_id is not None
+            conversation = _row_for_conversation(
+                cursor, request.scope, request.conversation_id, lock=True
             )
-            ids = [str(item["message_id"]) for item in cursor.fetchall()]
-            return _memory(row, ids)
+            rows = _selected_rows(
+                cursor, request.scope, request.conversation_id, message_ids
+            )
+            cited_messages = {str(row["id"]): row for row in rows}
+            if not any(request.source_excerpt in row["content"] for row in rows):
+                raise ValueError("source_excerpt is not in the cited archived messages")
+            source_ref = f"conversation:{conversation['id']}#message:{message_ids[0]}"
+        cursor.execute(
+            "INSERT INTO memories "
+            "(scope, kind, content, summary, importance, source_type, source_ref, "
+            "source_excerpt, source_platform, conversation_id, client_request_id, "
+            "valid_from, valid_to) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)",
+            (request.scope, request.kind, request.content, request.summary,
+             request.importance, request.source_type, source_ref, request.source_excerpt,
+             conversation["platform"] if conversation else None,
+             conversation["id"] if conversation else None, request_id,
+             utc_database_time(request.valid_from), utc_database_time(request.valid_to)),
+        )
+        memory_id = cursor.lastrowid
+        if embedding.enabled():
+            cursor.execute(
+                "UPDATE memories SET embedding = %s, embedding_model = %s, embedding_dim = %s "
+                "WHERE id = %s AND scope = %s",
+                (embedding.vector_json(request.content), embedding.MODEL_ID,
+                 embedding.DIMENSION, memory_id, request.scope),
+            )
+        if conversation:
+            for message_id in message_ids:
+                message_text = cited_messages[message_id]["content"]
+                link_excerpt = (request.source_excerpt if request.source_excerpt in message_text
+                                else message_text.strip()[:1000])
+                cursor.execute(
+                    "INSERT INTO memory_message_links "
+                    "(memory_id, message_id, scope, source_excerpt) "
+                    "VALUES (%s, %s, %s, %s)",
+                    (memory_id, message_id, request.scope, link_excerpt),
+                )
+            cursor.execute(
+                "UPDATE conversations SET memory_count = memory_count + 1, "
+                "updated_at = UTC_TIMESTAMP(6) WHERE id = %s AND scope = %s",
+                (conversation["id"], request.scope),
+            )
+        cursor.execute("SELECT * FROM memories WHERE id = %s", (memory_id,))
+        result = {"memory": _memory(cursor.fetchone(), message_ids), "created": True}
+        _remember_response(cursor, request.scope, request_id, {"memory": result["memory"]})
+        return result
 
 
 def create_manual_preview(data: ExtractionPreviewInput | dict[str, Any]) -> dict[str, Any]:
     request = (data if isinstance(data, ExtractionPreviewInput)
                else ExtractionPreviewInput.model_validate(data))
     preview_id = str(uuid4())
-    expires = datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(hours=24)
-    with _transaction() as connection:
-        with connection.cursor() as cursor:
-            _row_for_conversation(cursor, request.scope, request.conversation_id)
-            rows = _selected_rows(cursor, request.scope, request.conversation_id,
-                                  request.message_ids)
-            candidates = []
-            for row in rows:
-                # A literal draft is safe to display without a model. The user edits it.
-                excerpt = row["content"].strip()[:1000]
-                candidates.append({
-                    "candidate_id": str(uuid4()), "kind": "fact", "content": excerpt,
-                    "summary": None, "source_message_ids": [str(row["id"])],
-                    "source_excerpt": excerpt,
-                })
-            selected_ids = [str(row["id"]) for row in rows]
-            cursor.execute(
-                "INSERT INTO extraction_previews "
-                "(id, scope, conversation_id, selected_message_ids, candidates, status, expires_at) "
-                "VALUES (%s, %s, %s, %s, %s, 'pending', %s)",
-                (preview_id, request.scope, request.conversation_id,
-                 json.dumps(selected_ids), json.dumps(candidates, ensure_ascii=False), expires),
-            )
+    expires = datetime.now(UTC).replace(tzinfo=None) + timedelta(hours=24)
+    with _transaction() as connection, connection.cursor() as cursor:
+        _row_for_conversation(cursor, request.scope, request.conversation_id)
+        rows = _selected_rows(cursor, request.scope, request.conversation_id,
+                              request.message_ids)
+        candidates = []
+        for row in rows:
+            # A literal draft is safe to display without a model. The user edits it.
+            excerpt = row["content"].strip()[:1000]
+            candidates.append({
+                "candidate_id": str(uuid4()), "kind": "fact", "content": excerpt,
+                "summary": None, "source_message_ids": [str(row["id"])],
+                "source_excerpt": excerpt,
+            })
+        selected_ids = [str(row["id"]) for row in rows]
+        cursor.execute(
+            "INSERT INTO extraction_previews "
+            "(id, scope, conversation_id, selected_message_ids, candidates, status, expires_at) "
+            "VALUES (%s, %s, %s, %s, %s, 'pending', %s)",
+            (preview_id, request.scope, request.conversation_id,
+             json.dumps(selected_ids), json.dumps(candidates, ensure_ascii=False), expires),
+        )
     return {
         "preview_id": preview_id, "expires_at": _timestamp(expires),
         "conversation_id": request.conversation_id,
@@ -130,81 +205,87 @@ def commit_manual_preview(preview_id: str, data: ExtractionCommitInput | dict[st
                else ExtractionCommitInput.model_validate(data))
     body = request.model_dump(mode="json", exclude={"client_request_id"})
     body["preview_id"] = preview_id
-    with _transaction() as connection:
-        with connection.cursor() as cursor:
-            cached = _claim_request(cursor, request.scope, str(request.client_request_id),
-                                    "commit_preview", body)
-            if cached is not None:
-                return cached
-            cursor.execute(
-                "SELECT * FROM extraction_previews WHERE id = %s AND scope = %s FOR UPDATE",
-                (preview_id, request.scope),
-            )
-            preview = cursor.fetchone()
-            if preview is None:
-                raise NotFound("preview not found in this scope")
-            if preview["expires_at"] <= datetime.now(timezone.utc).replace(tzinfo=None):
-                raise PreviewExpired("preview expired; generate a new one")
-            if preview["status"] != "pending":
-                raise StateConflict("preview has already been committed")
-            candidates = {item["candidate_id"]: item for item in _json(preview["candidates"])}
-            chosen = []
-            for item in request.selected:
-                candidate = candidates.get(str(item.candidate_id))
-                if candidate is None:
-                    raise ValueError("candidate_id does not belong to this preview")
-                chosen.append((item, candidate))
+    with _transaction() as connection, connection.cursor() as cursor:
+        cached = _claim_request(cursor, request.scope, str(request.client_request_id),
+                                "commit_preview", body)
+        if cached is not None:
+            return cached
+        cursor.execute(
+            "SELECT * FROM extraction_previews WHERE id = %s AND scope = %s FOR UPDATE",
+            (preview_id, request.scope),
+        )
+        preview = cursor.fetchone()
+        if preview is None:
+            raise NotFound("preview not found in this scope")
+        if preview["expires_at"] <= datetime.now(UTC).replace(tzinfo=None):
+            raise PreviewExpired("preview expired; generate a new one")
+        if preview["status"] != "pending":
+            raise StateConflict("preview has already been committed")
+        candidates = {item["candidate_id"]: item for item in _json(preview["candidates"])}
+        chosen = []
+        for item in request.selected:
+            candidate = candidates.get(str(item.candidate_id))
+            if candidate is None:
+                raise ValueError("candidate_id does not belong to this preview")
+            chosen.append((item, candidate))
 
-            memories = []
-            if chosen:
-                conversation = _row_for_conversation(
-                    cursor, request.scope, preview["conversation_id"], lock=True
-                )
-                selected_ids = set(_json(preview["selected_message_ids"]))
-                cited_ids = list({mid for _, candidate in chosen
-                                  for mid in candidate["source_message_ids"]})
-                if not cited_ids:
-                    raise ValueError("candidate must cite an archived message")
-                rows = _selected_rows(cursor, request.scope, preview["conversation_id"],
-                                      cited_ids)
-                messages = {str(row["id"]): row for row in rows}
-                for item, candidate in chosen:
-                    _check_evidence(candidate, selected_ids, messages)
-                    source_ids = candidate["source_message_ids"]
-                    cursor.execute(
-                        "INSERT INTO memories "
-                        "(scope, kind, content, summary, source_type, source_ref, source_excerpt, "
-                        "source_platform, conversation_id) VALUES (%s, %s, %s, %s, 'chat', %s, "
-                        "%s, %s, %s)",
-                        (request.scope, item.kind, item.content, item.summary,
-                         f"conversation:{conversation['id']}#message:{source_ids[0]}",
-                         candidate["source_excerpt"], conversation["platform"],
-                         conversation["id"]),
-                    )
-                    memory_id = cursor.lastrowid
-                    for message_id in source_ids:
-                        message_text = messages[message_id]["content"]
-                        link_excerpt = (candidate["source_excerpt"] if
-                                        candidate["source_excerpt"] in message_text else
-                                        message_text.strip()[:1000])
-                        cursor.execute(
-                            "INSERT INTO memory_message_links "
-                            "(memory_id, message_id, scope, source_excerpt) "
-                            "VALUES (%s, %s, %s, %s)",
-                            (memory_id, message_id, request.scope, link_excerpt),
-                        )
-                    cursor.execute("SELECT * FROM memories WHERE id = %s", (memory_id,))
-                    memories.append(_memory(cursor.fetchone(), source_ids))
-                cursor.execute(
-                    "UPDATE conversations SET memory_count = memory_count + %s, "
-                    "updated_at = UTC_TIMESTAMP(6) WHERE id = %s AND scope = %s",
-                    (len(memories), conversation["id"], request.scope),
-                )
-            cursor.execute(
-                "UPDATE extraction_previews SET status = 'committed', "
-                "committed_at = UTC_TIMESTAMP(6) WHERE id = %s AND scope = %s",
-                (preview_id, request.scope),
+        memories = []
+        if chosen:
+            conversation = _row_for_conversation(
+                cursor, request.scope, preview["conversation_id"], lock=True
             )
-            result = {"memories": memories, "created": bool(memories)}
-            _remember_response(cursor, request.scope, str(request.client_request_id), result)
-            return result
+            selected_ids = set(_json(preview["selected_message_ids"]))
+            cited_ids = list({mid for _, candidate in chosen
+                              for mid in candidate["source_message_ids"]})
+            if not cited_ids:
+                raise ValueError("candidate must cite an archived message")
+            rows = _selected_rows(cursor, request.scope, preview["conversation_id"],
+                                  cited_ids)
+            messages = {str(row["id"]): row for row in rows}
+            for item, candidate in chosen:
+                _check_evidence(candidate, selected_ids, messages)
+                source_ids = candidate["source_message_ids"]
+                cursor.execute(
+                    "INSERT INTO memories "
+                    "(scope, kind, content, summary, source_type, source_ref, source_excerpt, "
+                    "source_platform, conversation_id) VALUES (%s, %s, %s, %s, 'chat', %s, "
+                    "%s, %s, %s)",
+                    (request.scope, item.kind, item.content, item.summary,
+                     f"conversation:{conversation['id']}#message:{source_ids[0]}",
+                     candidate["source_excerpt"], conversation["platform"],
+                     conversation["id"]),
+                )
+                memory_id = cursor.lastrowid
+                if embedding.enabled():
+                    cursor.execute(
+                        "UPDATE memories SET embedding = %s, embedding_model = %s, "
+                        "embedding_dim = %s WHERE id = %s AND scope = %s",
+                        (embedding.vector_json(item.content), embedding.MODEL_ID,
+                         embedding.DIMENSION, memory_id, request.scope),
+                    )
+                for message_id in source_ids:
+                    message_text = messages[message_id]["content"]
+                    link_excerpt = (candidate["source_excerpt"] if
+                                    candidate["source_excerpt"] in message_text else
+                                    message_text.strip()[:1000])
+                    cursor.execute(
+                        "INSERT INTO memory_message_links "
+                        "(memory_id, message_id, scope, source_excerpt) "
+                        "VALUES (%s, %s, %s, %s)",
+                        (memory_id, message_id, request.scope, link_excerpt),
+                    )
+                cursor.execute("SELECT * FROM memories WHERE id = %s", (memory_id,))
+                memories.append(_memory(cursor.fetchone(), source_ids))
+            cursor.execute(
+                "UPDATE conversations SET memory_count = memory_count + %s, "
+                "updated_at = UTC_TIMESTAMP(6) WHERE id = %s AND scope = %s",
+                (len(memories), conversation["id"], request.scope),
+            )
+        cursor.execute(
+            "UPDATE extraction_previews SET status = 'committed', "
+            "committed_at = UTC_TIMESTAMP(6) WHERE id = %s AND scope = %s",
+            (preview_id, request.scope),
+        )
+        result = {"memories": memories, "created": bool(memories)}
+        _remember_response(cursor, request.scope, str(request.client_request_id), result)
+        return result

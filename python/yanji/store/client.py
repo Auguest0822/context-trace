@@ -55,10 +55,9 @@ def connect(settings: SeekDBSettings | None = None) -> Connection:
 
 def check_connection(settings: SeekDBSettings | None = None) -> bool:
     """Return True after a round trip to the configured database."""
-    with connect(settings) as connection:
-        with connection.cursor() as cursor:
-            cursor.execute("SELECT 1 AS ok")
-            return cursor.fetchone()["ok"] == 1
+    with connect(settings) as connection, connection.cursor() as cursor:
+        cursor.execute("SELECT 1 AS ok")
+        return cursor.fetchone()["ok"] == 1
 
 
 def _existing_tables(connection: Connection) -> set[str]:

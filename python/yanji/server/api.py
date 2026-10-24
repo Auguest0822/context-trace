@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import logging
 import os
+from contextlib import asynccontextmanager
 from time import perf_counter
 from typing import Annotated, Any, Literal
 from uuid import uuid4
@@ -20,14 +21,39 @@ from pydantic import AwareDatetime
 from pymysql.err import IntegrityError, InterfaceError, OperationalError
 
 from yanji.models import (
-    ConversationInput, ExtractionCommitInput, ExtractionPreviewInput, MessageAppendInput,
+    ConversationInput,
+    ExtractionCommitInput,
+    ExtractionPreviewInput,
+    MemoryContextInput,
+    MemoryHandoffInput,
+    MemoryKind,
+    MemoryReconcileInput,
+    MemorySearchInput,
+    MemoryWriteInput,
+    MessageAppendInput,
 )
-from yanji.store import memory_repo, repo
+from yanji.store import memory_repo, repo, retrieval, trace_repo, version_repo
 from yanji.store.client import check_connection
+
+try:
+    from yanji.server.mcp_server import mcp
+except ModuleNotFoundError as exc:
+    if exc.name != "mcp":
+        raise
+    mcp = None  # type: ignore[assignment]
 
 logger = logging.getLogger(__name__)
 
-app = FastAPI(title="ContextTrace API", version="0.1.0")
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    if mcp is None:
+        yield
+    else:
+        async with mcp.session_manager.run():
+            yield
+
+
+app = FastAPI(title="ContextTrace API", version="0.1.0", lifespan=lifespan)
 
 # The console is a separate Vite origin during local development. Deployment may
 # set an explicit comma-separated list; an empty value disables browser CORS.
@@ -37,14 +63,16 @@ _origins = os.getenv(
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[origin.strip() for origin in _origins.split(",") if origin.strip()],
-    allow_methods=["GET", "POST"],
+    allow_methods=["GET", "POST", "DELETE"],
     allow_headers=["Content-Type", "X-Request-ID"],
 )
 
 Scope = Annotated[str, Query(min_length=1, max_length=128)]
 ConversationId = Annotated[str, Path(pattern=r"^[1-9][0-9]*$")]
 PreviewId = Annotated[str, Path(pattern=r"^[0-9a-fA-F-]{36}$")]
+TraceId = Annotated[str, Path(pattern=r"^[0-9a-fA-F-]{36}$")]
 Platform = Literal["deepseek", "kimi", "doubao", "agent", "other"]
+MemoryStatus = Literal["active", "superseded", "expired"]
 
 
 @app.middleware("http")
@@ -110,6 +138,11 @@ async def preview_expired(request: Request, exc: memory_repo.PreviewExpired) -> 
     return _error(request, 410, "PREVIEW_EXPIRED", str(exc))
 
 
+@app.exception_handler(retrieval.EmbeddingUnavailable)
+async def embedding_unavailable(request: Request, exc: retrieval.EmbeddingUnavailable) -> JSONResponse:
+    return _error(request, 422, "EMBEDDING_UNAVAILABLE", str(exc))
+
+
 @app.exception_handler(IntegrityError)
 async def integrity_conflict(request: Request, exc: IntegrityError) -> JSONResponse:
     logger.warning("request_id=%s database integrity conflict", request.state.request_id)
@@ -131,7 +164,7 @@ async def store_unavailable(request: Request, exc: Exception) -> JSONResponse:
 def _reject_unknown_query(request: Request, allowed: set[str]) -> None:
     unknown = set(request.query_params) - allowed
     if unknown:
-        raise ValueError(f"unknown query parameter: {sorted(unknown)[0]}")
+        raise ValueError(f"unknown query parameter: {min(unknown)}")
 
 
 def _check_scope(scope: str) -> str:
@@ -231,3 +264,83 @@ def commit_extraction(
 def get_memory(request: Request, memory_id: ConversationId, scope: Scope) -> dict[str, Any]:
     _reject_unknown_query(request, {"scope"})
     return {"memory": memory_repo.get_memory(_check_scope(scope), memory_id)}
+
+
+@app.post("/v1/memories")
+def write_memory(request: Request, data: MemoryWriteInput) -> JSONResponse:
+    _reject_unknown_query(request, set())
+    result = memory_repo.write_memory(data)
+    return JSONResponse(status_code=201 if result.pop("created") else 200, content=result)
+
+
+@app.get("/v1/memories")
+def list_memories(
+    request: Request, scope: Scope, status: MemoryStatus | None = None,
+    kind: MemoryKind | None = None, platform: Platform | None = None,
+    conversation_id: Annotated[str | None, Query(pattern=r"^[1-9][0-9]*$")] = None,
+    limit: Annotated[int, Query(ge=1, le=100)] = 20,
+    cursor: str | None = None,
+) -> dict[str, Any]:
+    _reject_unknown_query(
+        request, {"scope", "status", "kind", "platform", "conversation_id", "limit", "cursor"}
+    )
+    return retrieval.list_memories(
+        _check_scope(scope), status=status, kind=kind, platform=platform,
+        conversation_id=conversation_id, limit=limit, cursor=cursor,
+    )
+
+
+@app.post("/v1/memories/search")
+def search_memories(request: Request, data: MemorySearchInput) -> dict[str, Any]:
+    _reject_unknown_query(request, set())
+    return retrieval.search_memories(data)
+
+
+@app.post("/v1/memories/context")
+def assemble_context(request: Request, data: MemoryContextInput) -> dict[str, Any]:
+    _reject_unknown_query(request, set())
+    return retrieval.assemble_context(data)
+
+
+@app.post("/v1/memories/reconcile")
+def reconcile_memory(request: Request, data: MemoryReconcileInput) -> dict[str, Any]:
+    _reject_unknown_query(request, set())
+    return version_repo.reconcile(data)
+
+
+@app.get("/v1/memories/{memory_id}/history")
+def memory_history(request: Request, memory_id: ConversationId, scope: Scope) -> dict[str, Any]:
+    _reject_unknown_query(request, {"scope"})
+    return version_repo.history(_check_scope(scope), memory_id)
+
+
+@app.delete("/v1/memories/{memory_id}")
+def forget_memory(request: Request, memory_id: ConversationId, scope: Scope) -> dict[str, Any]:
+    _reject_unknown_query(request, {"scope"})
+    return version_repo.forget(_check_scope(scope), memory_id)
+
+
+@app.get("/v1/traces")
+def list_traces(
+    request: Request, scope: Scope, limit: Annotated[int, Query(ge=1, le=100)] = 20,
+    cursor: str | None = None,
+) -> dict[str, Any]:
+    _reject_unknown_query(request, {"scope", "limit", "cursor"})
+    return trace_repo.list_traces(_check_scope(scope), limit=limit, cursor=cursor)
+
+
+@app.get("/v1/traces/{trace_id}")
+def get_trace(request: Request, trace_id: TraceId, scope: Scope) -> dict[str, Any]:
+    _reject_unknown_query(request, {"scope"})
+    return trace_repo.get_trace(_check_scope(scope), trace_id)
+
+
+@app.post("/v1/memories/handoff")
+def handoff(request: Request, data: MemoryHandoffInput) -> dict[str, Any]:
+    _reject_unknown_query(request, set())
+    return retrieval.handoff(data)
+
+
+if mcp is not None:
+    # Mount last: the root mount matches every URL, so REST routes take priority.
+    app.mount("/", mcp.streamable_http_app(json_response=True))

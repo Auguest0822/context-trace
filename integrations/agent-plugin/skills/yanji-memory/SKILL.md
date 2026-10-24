@@ -1,23 +1,22 @@
-﻿# 言迹记忆 Skill
+# 言迹 ContextTrace Agent 使用说明
 
-调用约定：工具输入字段与对应的 HTTP 接口一致，业务错误码原样返回。本 Skill 只规定何时调用这些工具，不负责数据库连接，也不会自动获得访问宿主历史对话的权限。
+## 连接
 
-## 何时归档对话
-- 宿主确实提供了消息，且用户明确确认要归档时 -> 调用 `conversation_capture`
-- 只提交工具参数中给出的消息；**不能自动读取或上传宿主的完整会话历史**
-- 宿主没有可靠的会话导出或事件接口时，Agent 接入只提供记忆读写，完整对话归档仍走用户导出或手动导入
+先在本机启动 seekdb 和 Python API；安装后端的 MCP 可选依赖：
 
-## 何时写入记忆
-- 出现明确结论、决策、约束、踩坑经验时 -> 调用 `memory_write`
-- 必须携带 `source_ref`（出处），没有出处的信息不得写入
-- 归档对话只产生对话和消息，不自动产生记忆；用户确认候选后才写入
+```powershell
+.\.venv\Scripts\python.exe -m pip install -e '.[mcp]'
+```
 
-## 何时读取记忆
-- 开始新任务前 -> 调用 `memory_search` 取回相关记忆
-- 接手他人工作时 -> 调用 `memory_handoff` 生成交接清单
+同一个 API 进程在 `http://127.0.0.1:8000/mcp` 提供 Streamable HTTP。`127.0.0.1` 指运行 Agent 宿主的本机；远程 Agent 不能直接访问用户电脑上的这个地址。调用前先用 `/readyz` 确认数据库可用。
 
-## 冲突处理
-- 新信息与旧记忆矛盾时 -> 调用 `memory_reconcile`，不要直接覆盖
+## 何时调用
 
-## 隐私
-- 用户要求删除时 -> 调用 `memory_forget`；这是硬删除，与“旧版本失效”不同
+- 开始项目任务前，调用 `memory_search`，明确传 `scope`、问题和范围。当前先用 `mode=keyword`；向量与混合尚未配置时会返回 `EMBEDDING_UNAVAILABLE`。
+- 用户明确确认一条结论，并提供可核验原文时，调用 `memory_write`。文档/Git/手动来源必须提供 `source_ref` 和 `source_excerpt`；聊天来源需提供同一 scope 中已归档的 `conversation_id`、`source_message_ids` 和逐字证据，不能自称已经读到未提供的历史。
+- 只有 Agent 宿主实际提供了消息，且用户确认归档时，才调用 `conversation_capture`。它只归档传入的消息，不会自动读取整个聊天历史。
+- 接手项目时，调用 `memory_handoff`，说明目标并保留返回的出处；它只整理已存记忆。
+- 新决定明确取代旧决定时，调用 `memory_reconcile`，指定旧记忆 ID、新结论及替代理由。
+- 用户明确要求忘记某条记忆时，调用 `memory_forget`。删除不可恢复，调用前核对 ID 和范围。
+
+这些工具与网页 HTTP API 调用同一业务函数和同一个 seekdb。`memory_search` 返回出处、轨迹 ID 和预算信息；在结果为空或数据库不可用时，向用户如实说明，不能编造旧记忆。
