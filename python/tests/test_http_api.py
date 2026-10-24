@@ -9,10 +9,8 @@ from unittest.mock import patch
 
 from fastapi.testclient import TestClient
 from pymysql.err import OperationalError
-
 from yanji.server.api import app
 from yanji.store.repo import IdempotencyConflict, NotFound, StateConflict
-
 
 ROOT = Path(__file__).resolve().parents[2]
 SAMPLE = json.loads(

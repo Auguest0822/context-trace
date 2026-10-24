@@ -14,6 +14,8 @@ const apiResult = ref(null)
 const searchError = ref('')
 const loading = ref(false)
 const contextResult = ref(null)
+const contextLoading = ref(false)
+let contextRequestVersion = 0
 const kindValues = { '决策': 'decision', '约束': 'constraint', '事实': 'fact', '偏好': 'preference', '技能': 'skill' }
 const platformValues = { 'DeepSeek': 'deepseek', 'Kimi': 'kimi', '豆包': 'doubao', 'Agent': 'agent', '其他': 'other' }
 const modeValues = { '关键词': 'keyword', '向量': 'vector', '混合': 'hybrid' }
@@ -40,14 +42,17 @@ const results = computed(() => {
       source: Object.keys(platformValues).find(key => platformValues[key] === m.source_platform) || m.source_type,
       conversation: m.source_ref, conversationLabel: `对话 #${m.conversation_id || '—'}`,
       conversationId: m.conversation_id, messageId: m.source_message_ids?.[0],
-      time: m.created_at, quote: m.source_excerpt, content: m.content,
+      time: m.created_at, quote: m.source_excerpt, content: m.content, summary: m.summary,
       tokens: item.token_count, reasonCodes: item.reason_codes
     }
   })
 })
 
 const selectedResults = computed(() => results.value.filter(r => selectedIds.value.has(r.id)
-  && (!isApi || contextResult.value?.included_memory_ids.includes(r.id))))
+  && (!isApi || contextResult.value?.included_memory_ids.includes(r.id))).map(r => {
+    const form = contextResult.value?.items.find(item => item.memory_id === r.id)?.selected_form
+    return { ...r, contextForm: form, contextBody: isApi ? (form === 'summary' ? r.summary : r.content) : r.quote }
+  }))
 const explanations = computed(() => isApi
   ? results.value.map((result, index) => ({
       seq: index + 1,
@@ -63,11 +68,18 @@ const totalTokens = computed(() => isApi
 
 async function refreshContext() {
   if (!isApi || !searched.value) return
+  const version = ++contextRequestVersion
+  contextLoading.value = true
   try {
-    contextResult.value = await assembleContext([...selectedIds.value], tokenBudget.value)
+    const result = await assembleContext([...selectedIds.value], tokenBudget.value)
+    if (version === contextRequestVersion) contextResult.value = result
   } catch (error) {
-    contextResult.value = null
-    searchError.value = `组装上下文失败：${error.message}`
+    if (version === contextRequestVersion) {
+      contextResult.value = null
+      searchError.value = `组装上下文失败：${error.message}`
+    }
+  } finally {
+    if (version === contextRequestVersion) contextLoading.value = false
   }
 }
 
@@ -113,7 +125,7 @@ function openSource(result) {
 }
 
 async function copyContext() {
-  if (isApi && !contextResult.value) return
+  if (isApi && (!contextResult.value || contextLoading.value)) return
   const text = isApi ? contextResult.value.context_text : selectedResults.value
     .map(r => `[${r.category}] ${r.title}\n${r.content || r.desc}\n来源：${r.conversation} · ${r.time}`)
     .join('\n\n')
@@ -288,10 +300,11 @@ async function copyContext() {
               <span class="ctx-title">{{ r.title }}</span>
               <span class="ctx-source">
                 <SourceBadge :source="r.source" :size="16" />
-                {{ r.source }} · 对话 #{{ r.conversationId }}
+                {{ r.source }} · {{ r.conversationLabel || r.conversation }}
               </span>
             </div>
-            <p class="ctx-content">{{ r.quote }}</p>
+            <p class="ctx-content">{{ r.contextBody }}</p>
+            <small v-if="isApi && r.contextForm === 'summary'">预算内使用摘要</small>
             <p class="ctx-origin">来源：{{ r.conversation }} · {{ r.time }}</p>
           </div>
 
@@ -308,7 +321,7 @@ async function copyContext() {
             <span class="token-value">约 {{ totalTokens }} tokens</span>
           </div>
 
-          <button class="copy-btn" :disabled="!selectedResults.length || (isApi && !contextResult?.context_text)" @click="copyContext">
+          <button class="copy-btn" :disabled="!selectedResults.length || contextLoading || (isApi && !contextResult?.context_text)" @click="copyContext">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
             复制上下文
           </button>

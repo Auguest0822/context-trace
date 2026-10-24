@@ -186,7 +186,7 @@ HTTP 成功返回业务 JSON，错误统一为：
 
 ### 3.3 内部存储字段
 
-`embedding`、`embedding_model`、`embedding_dim`、`client_request_id`、内部检索索引等只在存储层使用，不作为普通 HTTP 响应字段。当前人工候选写入时 embedding 留空。接入向量能力后由 Python 生成 embedding；模型与维度是部署配置，写入时校验维度与 `VECTOR(n)` 一致。更换维度需要新表或明确的数据迁移，不能混写。
+`embedding`、`embedding_model`、`embedding_dim`、`client_request_id`、内部检索索引等只在存储层使用，不作为普通 HTTP 响应字段。默认不启用向量时 embedding 留空；设置 `YANJI_EMBEDDING_BACKEND=hash` 后，Python 在确认写入时生成 1024 维字符特征基线向量。它不是神经语义模型。模型与维度是部署配置；更换维度需要新表或明确的数据迁移，不能混写。
 
 首版至少有以下持久化对象：
 
@@ -208,7 +208,7 @@ HTTP 成功返回业务 JSON，错误统一为：
 | 功能组 | 用户想做什么 | 页面/调用方 | 接口 |
 | --- | --- | --- | --- |
 | 系统状态 | 确认后端和数据库可用 | 顶部连接状态、部署检查 | `GET /healthz`、`GET /readyz` |
-| 对话档案 | 保存选定聊天、查看或删除原始记录 | 手动导入、对话首页/详情、Agent 导出适配；后续浏览器扩展 | `POST /v1/conversations`、`POST /v1/conversations/{id}/messages`、`GET /v1/conversations`、`GET /v1/conversations/{id}`、`GET /v1/conversations/{id}/messages`、`DELETE /v1/conversations/{id}` |
+| 对话档案 | 保存选定聊天和查看原始记录 | 手动导入、对话首页/详情、Agent 导出适配；后续浏览器扩展 | `POST /v1/conversations`、`POST /v1/conversations/{id}/messages`、`GET /v1/conversations`、`GET /v1/conversations/{id}`、`GET /v1/conversations/{id}/messages` |
 | 形成记忆 | 从选中消息预览候选并由用户确认，或直接写入一条记忆 | 对话详情、记忆库、Agent 工具 | `POST /v1/extractions/preview`、`POST /v1/extractions/{preview_id}/commit`、`POST /v1/memories` |
 | 查看记忆 | 按来源、类别和状态浏览已确认内容 | 记忆库、对话详情 | `GET /v1/memories`、`GET /v1/memories/{id}` |
 | 找回并使用记忆 | 按问题和范围搜索；由用户决定最终交给 AI 的内容 | 记忆检索页、Agent 工具；后续浏览器扩展 | `POST /v1/memories/search`、`POST /v1/memories/context`、`POST /v1/memories/handoff` |
@@ -254,7 +254,7 @@ HTTP 成功返回业务 JSON，错误统一为：
 
 `GET /v1/conversations/{id}?scope=project:context-trace`：返回 `{"conversation":<Conversation>}`。`GET /v1/conversations/{id}/messages?scope=project:context-trace&limit=50&cursor=...`：返回 `{"items":[<Message>],"next_cursor":null}`，按 `sequence ASC, id ASC` 排序；`limit` 为 1–100、默认 50。页面以消息 ID 作为记忆证据定位锚点。
 
-`DELETE /v1/conversations/{id}?scope=project:context-trace`：用户确认后硬删除对话、其消息、这些消息产生的记忆及相关轨迹引用，并修复受影响的版本链；返回 200 `{"deleted":true,"conversation_id":"201","deleted_messages":2,"deleted_memories":1}`。不接受仅凭平台 URL 删除。
+当前版本不提供 `DELETE /v1/conversations/{id}`。2026-10-24 队长不批准整段对话及关联数据的级联永久删除，此能力移出本轮交付；单条记忆遗忘仍按第 4.11 节执行。
 
 ### 4.3 形成记忆：先预览候选，再由用户确认
 
@@ -306,7 +306,7 @@ HTTP 成功返回业务 JSON，错误统一为：
 }
 ```
 
-`selected` 可为 0–20 条；空数组表示放弃该预览并返回 200 `{"memories":[]}`。`candidate_id` 必须属于预览且不重复。用户可修改 `kind`、`content`、`summary`，但不能在确认请求中修改引用消息或证据片段；后端再次校验证据，并在同一事务中保存全部选中记忆及消息关联。**当前人工模式的 `embedding` 为 NULL，尚不能进行向量召回**；关键词检索可在后续接口接入。成功返回 201 `{"memories":[<Memory>]}`；同一预览第二次用不同内容提交返回 `STATE_CONFLICT`，幂等重试返回首次结果。用户关闭预览而不确认时，不产生记忆。
+`selected` 可为 0–20 条；空数组表示放弃该预览并返回 200 `{"memories":[]}`。`candidate_id` 必须属于预览且不重复。用户可修改 `kind`、`content`、`summary`，但不能在确认请求中修改引用消息或证据片段；后端再次校验证据，并在同一事务中保存全部选中记忆及消息关联。默认不启用向量时 `embedding` 为 NULL；启用本地 `hash` 基线后在确认事务内生成向量。成功返回 201 `{"memories":[<Memory>]}`；同一预览第二次用不同内容提交返回 `STATE_CONFLICT`，幂等重试返回首次结果。用户关闭预览而不确认时，不产生记忆。
 
 ### 4.4 形成记忆：直接录入一条已有结论
 
@@ -492,7 +492,7 @@ Skill 只规定何时调用这些工具，不负责数据库连接，也不自�
 | 页面/能力 | 读取接口 | 写入接口 |
 | --- | --- | --- |
 | 对话首页 | `GET /v1/conversations` | `POST /v1/conversations` |
-| 对话详情与选择性提炼 | `GET /v1/conversations/{id}`、`GET /v1/conversations/{id}/messages`、`GET /v1/memories?conversation_id=...` | `POST /v1/extractions/preview`、`POST /v1/extractions/{preview_id}/commit`、`DELETE /v1/conversations/{id}` |
+| 对话详情与选择性提炼 | `GET /v1/conversations/{id}`、`GET /v1/conversations/{id}/messages`、`GET /v1/memories?conversation_id=...` | `POST /v1/extractions/preview`、`POST /v1/extractions/{preview_id}/commit` |
 | 记忆库与时间线 | `GET /v1/memories`、`GET /v1/memories/{id}` | `POST /v1/memories`、`DELETE /v1/memories/{id}` |
 | 召回回放 | `POST /v1/memories/search`、`GET /v1/traces`、`GET /v1/traces/{trace_id}` | 无 |
 | 最终上下文选择 | 检索结果与记忆详情 | `POST /v1/memories/context` |
@@ -514,12 +514,12 @@ Skill 只规定何时调用这些工具，不负责数据库连接，也不自�
 7. 预算缩小后优先采用摘要或排除候选；用户取消勾选的记忆在最终上下文中不出现。
 8. 显式替代后旧记忆仍能在时间线查到，但默认检索只返回新记忆；失败时事务回滚。
 9. MCP 与 HTTP 调用同一业务逻辑；未提供消息的 Agent 宿主不能通过 MCP 凭空归档历史对话。
-10. 硬删除一条记忆或整段对话后，相应正文、embedding、证据和轨迹引用不可再读取。
+10. 硬删除一条记忆后，相应记忆正文、embedding、证据关联和轨迹引用不可再读取；原始对话保留。
 11. 在无腾讯云配置、无浏览器扩展的干净环境中，从样例对话完成归档、网页选取/提炼/检索/溯源，并让 Agent 经 MCP 搜索到同一份记忆。
 
 ## 8. 当前落地状态及待审查决定
 
 - `python/yanji/store/schema.sql` 已按本契约建立对话、消息、提炼预览、记忆、证据关联、检索轨迹及候选、版本理由、幂等记录共 9 张表；已在 seekdb `1.4.0-100000172026082615` 实例验证建表和可回滚读写。该脚本用于新库初始化；旧版草案 `memories` 表需要单独迁移，初始化命令会拒绝静默覆盖。
-- `python/yanji/store/client.py` 已提供环境变量连接、健康检查和建表入口；`.env.example` 已补 host/port/user/password/database 与固定的向量维度。`.env` 不会自动加载，运行服务时须自行注入环境变量。应用层的字段枚举、长度、跨表归属、删除级联及幂等行为仍需在业务接口中实现和验证。
+- `python/yanji/store/client.py` 已提供环境变量连接、健康检查和建表入口；`.env.example` 已补 host/port/user/password/database 与固定的向量维度。`.env` 不会自动加载，运行服务时须自行注入环境变量。字段校验、跨表归属、单条遗忘和幂等行为已在真实 seekdb 验收；逐项证据见 `RESULTS.md`。
 - 现有项目方案写“一条 SQL 完成混合检索”。本文首版采用**同一 seekdb 内两路候选、Python 融合排序**，以保证关键词未命中的语义结果仍可召回。若实测证明单 SQL 方案同时满足召回与性能，可在后续版本改实现，不改变 API。
 - 需队长最终确定：① embedding/抽取模型（当前 SQL 固定 `VECTOR(1024)`，模型必须输出 1024 维）；② 对话正文的保存范围与数据保留期限；③ 检索候选深度、RRF 常数与 tokenizer；④ 联调和演示环境的认证方式；⑤ 自动评测要求的启动命令与数据准备流程；⑥ 首个可靠的浏览器站点适配器。

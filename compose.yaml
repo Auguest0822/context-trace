@@ -1,0 +1,18 @@
+services:
+  seekdb:
+    image: oceanbase/seekdb:1.4.0-100000172026082615
+    container_name: contexttrace-seekdb
+    environment:
+      ROOT_PASSWORD: ${SEEKDB_ROOT_PASSWORD:?Set SEEKDB_ROOT_PASSWORD in your shell}
+      SEEKDB_DATABASE: context_trace
+      CPU_COUNT: "2"
+      MEMORY_LIMIT: 2G
+      DATAFILE_SIZE: 2G
+      LOG_DISK_SIZE: 2G
+    ports:
+      - "127.0.0.1:2881:2881"
+    volumes:
+      - seekdb_data:/var/lib/seekdb
+
+volumes:
+  seekdb_data:

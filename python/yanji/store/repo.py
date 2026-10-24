@@ -6,9 +6,10 @@ import base64
 import binascii
 import hashlib
 import json
+from collections.abc import Iterator
 from contextlib import contextmanager
-from datetime import datetime, timezone
-from typing import Any, Iterator
+from datetime import UTC, datetime
+from typing import Any
 
 from pymysql.connections import Connection
 from pymysql.cursors import DictCursor
@@ -46,7 +47,7 @@ def _transaction(settings: SeekDBSettings | None = None) -> Iterator[Connection]
 def _timestamp(value: datetime | None) -> str | None:
     if value is None:
         return None
-    return value.replace(tzinfo=timezone.utc).isoformat().replace("+00:00", "Z")
+    return value.replace(tzinfo=UTC).isoformat().replace("+00:00", "Z")
 
 
 def _conversation(row: dict[str, Any]) -> dict[str, Any]:
@@ -108,6 +109,8 @@ def _claim_request(
         (scope, request_id),
     )
     row = cursor.fetchone()
+    if row is None:
+        raise StateConflict("idempotency request was not persisted")
     if row["operation"] != operation or row["request_hash"] != digest:
         raise IdempotencyConflict("client_request_id already belongs to another request")
     if row["response_json"] is not None:
@@ -201,46 +204,46 @@ def capture_conversation(
     )
     request_id = str(request.client_request_id) if request.client_request_id else None
     body = request.model_dump(mode="json", exclude={"client_request_id"})
-    with _transaction(settings) as connection:
-        with connection.cursor() as cursor:
-            cached = _claim_request(cursor, request.scope, request_id, "capture", body)
-            if cached is not None:
-                return cached
-            existing = None
-            if request.external_conversation_id is not None:
-                cursor.execute(
-                    "SELECT * FROM conversations WHERE scope = %s AND platform = %s "
-                    "AND external_conversation_id = %s FOR UPDATE",
-                    (request.scope, request.platform, request.external_conversation_id),
-                )
-                existing = cursor.fetchone()
-            created = existing is None
-            if created:
-                cursor.execute(
-                    "INSERT INTO conversations (scope, platform, external_conversation_id, "
-                    "title, source_url, capture_method, capture_completeness, captured_at) "
-                    "VALUES (%s, %s, %s, %s, %s, %s, %s, UTC_TIMESTAMP(6))",
-                    (
-                        request.scope, request.platform, request.external_conversation_id,
-                        request.title, request.source_url, request.capture_method,
-                        request.capture_completeness,
-                    ),
-                )
-                conversation_id = cursor.lastrowid
-            else:
-                conversation_id = existing["id"]
-            stored, inserted = _store_messages(
-                cursor, request.scope, conversation_id, request.messages
+    with _transaction(settings) as connection, connection.cursor() as cursor:
+        cached = _claim_request(cursor, request.scope, request_id, "capture", body)
+        if cached is not None:
+            return cached
+        existing = None
+        if request.external_conversation_id is not None:
+            cursor.execute(
+                "SELECT * FROM conversations WHERE scope = %s AND platform = %s "
+                "AND external_conversation_id = %s FOR UPDATE",
+                (request.scope, request.platform, request.external_conversation_id),
             )
-            row = _row_for_conversation(cursor, request.scope, conversation_id)
-            result = {
-                "conversation": _conversation(row),
-                "messages": stored,
-                "inserted_count": inserted,
-                "created": created,  # Used by the future HTTP route to select 201 or 200.
-            }
-            _remember_response(cursor, request.scope, request_id, result)
-            return result
+            existing = cursor.fetchone()
+        created = existing is None
+        if created:
+            cursor.execute(
+                "INSERT INTO conversations (scope, platform, external_conversation_id, "
+                "title, source_url, capture_method, capture_completeness, captured_at) "
+                "VALUES (%s, %s, %s, %s, %s, %s, %s, UTC_TIMESTAMP(6))",
+                (
+                    request.scope, request.platform, request.external_conversation_id,
+                    request.title, request.source_url, request.capture_method,
+                    request.capture_completeness,
+                ),
+            )
+            conversation_id = cursor.lastrowid
+        else:
+            assert existing is not None
+            conversation_id = existing["id"]
+        stored, inserted = _store_messages(
+            cursor, request.scope, conversation_id, request.messages
+        )
+        row = _row_for_conversation(cursor, request.scope, conversation_id)
+        result = {
+            "conversation": _conversation(row),
+            "messages": stored,
+            "inserted_count": inserted,
+            "created": created,  # Used by the future HTTP route to select 201 or 200.
+        }
+        _remember_response(cursor, request.scope, request_id, result)
+        return result
 
 
 def append_messages(
@@ -255,30 +258,28 @@ def append_messages(
     request_id = str(request.client_request_id) if request.client_request_id else None
     body = request.model_dump(mode="json", exclude={"client_request_id"})
     body["conversation_id"] = str(conversation_id)
-    with _transaction(settings) as connection:
-        with connection.cursor() as cursor:
-            cached = _claim_request(cursor, request.scope, request_id, "append", body)
-            if cached is not None:
-                return cached
-            row = _row_for_conversation(cursor, request.scope, conversation_id, lock=True)
-            stored, inserted = _store_messages(cursor, request.scope, row["id"], request.messages)
-            result = {
-                "conversation": _conversation(
-                    _row_for_conversation(cursor, request.scope, conversation_id)
-                ),
-                "messages": stored,
-                "inserted_count": inserted,
-            }
-            _remember_response(cursor, request.scope, request_id, result)
-            return result
+    with _transaction(settings) as connection, connection.cursor() as cursor:
+        cached = _claim_request(cursor, request.scope, request_id, "append", body)
+        if cached is not None:
+            return cached
+        row = _row_for_conversation(cursor, request.scope, conversation_id, lock=True)
+        stored, inserted = _store_messages(cursor, request.scope, row["id"], request.messages)
+        result = {
+            "conversation": _conversation(
+                _row_for_conversation(cursor, request.scope, conversation_id)
+            ),
+            "messages": stored,
+            "inserted_count": inserted,
+        }
+        _remember_response(cursor, request.scope, request_id, result)
+        return result
 
 
 def get_conversation(
     scope: str, conversation_id: str | int, settings: SeekDBSettings | None = None
 ) -> dict[str, Any]:
-    with connect(settings) as connection:
-        with connection.cursor() as cursor:
-            return _conversation(_row_for_conversation(cursor, scope, conversation_id))
+    with connect(settings) as connection, connection.cursor() as cursor:
+        return _conversation(_row_for_conversation(cursor, scope, conversation_id))
 
 
 def _encode_cursor(*parts: Any) -> str:
@@ -344,10 +345,9 @@ def list_conversations(
         "SELECT * FROM conversations WHERE " + " AND ".join(clauses)
         + " ORDER BY updated_at DESC, id DESC LIMIT %s"
     )
-    with connect(settings) as connection:
-        with connection.cursor() as db_cursor:
-            db_cursor.execute(sql, (*params, limit + 1))
-            rows = db_cursor.fetchall()
+    with connect(settings) as connection, connection.cursor() as db_cursor:
+        db_cursor.execute(sql, (*params, limit + 1))
+        rows = db_cursor.fetchall()
     page = rows[:limit]
     next_cursor = None
     if len(rows) > limit:
@@ -381,11 +381,10 @@ def list_messages(
         "SELECT * FROM messages WHERE " + " AND ".join(clauses)
         + " ORDER BY sequence ASC, id ASC LIMIT %s"
     )
-    with connect(settings) as connection:
-        with connection.cursor() as db_cursor:
-            _row_for_conversation(db_cursor, scope, conversation_id)
-            db_cursor.execute(sql, (*params, limit + 1))
-            rows = db_cursor.fetchall()
+    with connect(settings) as connection, connection.cursor() as db_cursor:
+        _row_for_conversation(db_cursor, scope, conversation_id)
+        db_cursor.execute(sql, (*params, limit + 1))
+        rows = db_cursor.fetchall()
     page = rows[:limit]
     next_cursor = None
     if len(rows) > limit:

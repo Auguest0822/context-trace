@@ -4,14 +4,13 @@ from __future__ import annotations
 
 import unittest
 from contextlib import contextmanager
-from datetime import datetime, timezone
+from datetime import UTC, datetime
+from json import loads
 from unittest.mock import patch
 from uuid import uuid4
-from json import loads
 
 from pydantic import ValidationError
 from starlette.requests import Request
-
 from yanji.models import ExtractionCommitInput, ExtractionPreviewInput
 from yanji.server.api import commit_extraction, get_memory, preview_extraction
 from yanji.store.memory_repo import _check_evidence, commit_manual_preview, create_manual_preview
@@ -25,7 +24,7 @@ class MemoryCursor:
         self.preview = None
         self.lastrowid = 401
         self.result = None
-        self.now = datetime.now(timezone.utc).replace(tzinfo=None)
+        self.now = datetime.now(UTC).replace(tzinfo=None)
 
     def __enter__(self):
         return self

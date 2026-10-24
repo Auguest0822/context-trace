@@ -8,7 +8,6 @@ from uuid import UUID
 
 from yanji.models import ConversationInput
 
-
 ROOT = Path(__file__).resolve().parents[2]
 CONVERSATION_FILES = (
     "data/fixtures/conversation-import.sample.json",
