@@ -1,29 +1,77 @@
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, watch } from 'vue'
+import { useRouter } from 'vue-router'
 import { store } from '../store'
 import { SEARCH_RESULTS, MATCH_EXPLAIN } from '../data/mock'
 import SourceBadge from '../components/SourceBadge.vue'
 import CategoryTag from '../components/CategoryTag.vue'
+import { searchMemories, assembleContext } from '../data/memoryApi'
 
-const question = ref('初赛为什么优先保证本地复现？')
-const sourcePlatform = ref('DeepSeek')
-const conversation = ref('初赛部署讨论')
-const category = ref('决策')
-const searchMode = ref('混合')
+const router = useRouter()
+const isApi = import.meta.env.VITE_ARCHIVE_DATA_SOURCE === 'api'
+const vectorEnabled = import.meta.env.VITE_ENABLE_VECTOR_SEARCH === 'true'
+const apiResult = ref(null)
+const searchError = ref('')
+const loading = ref(false)
+const contextResult = ref(null)
+const kindValues = { '决策': 'decision', '约束': 'constraint', '事实': 'fact', '偏好': 'preference', '技能': 'skill' }
+const platformValues = { 'DeepSeek': 'deepseek', 'Kimi': 'kimi', '豆包': 'doubao', 'Agent': 'agent', '其他': 'other' }
+const modeValues = { '关键词': 'keyword', '向量': 'vector', '混合': 'hybrid' }
+
+const question = ref(isApi ? '' : '初赛为什么优先保证本地复现？')
+const sourcePlatform = ref(isApi ? '全部' : 'DeepSeek')
+const conversation = ref(isApi ? '' : '初赛部署讨论')
+const category = ref(isApi ? '全部' : '决策')
+const searchMode = ref(isApi ? '关键词' : '混合')
 const tokenBudget = ref(1200)
 const sortBy = ref('相关性优先')
-const searched = ref(true)
+const searched = ref(!isApi)
 
-const selectedIds = ref(new Set(['m1']))
+const selectedIds = ref(new Set(isApi ? [] : ['m1']))
 
 const results = computed(() => {
   if (!searched.value) return []
-  return SEARCH_RESULTS
+  if (!isApi) return SEARCH_RESULTS
+  return (apiResult.value?.items || []).map(item => {
+    const m = item.memory
+    return {
+      id: m.id, category: Object.keys(kindValues).find(key => kindValues[key] === m.kind) || m.kind,
+      title: m.summary || m.content.slice(0, 50), desc: m.content,
+      source: Object.keys(platformValues).find(key => platformValues[key] === m.source_platform) || m.source_type,
+      conversation: m.source_ref, conversationLabel: `对话 #${m.conversation_id || '—'}`,
+      conversationId: m.conversation_id, messageId: m.source_message_ids?.[0],
+      time: m.created_at, quote: m.source_excerpt, content: m.content,
+      tokens: item.token_count, reasonCodes: item.reason_codes
+    }
+  })
 })
 
-const selectedResults = computed(() => results.value.filter(r => selectedIds.value.has(r.id)))
+const selectedResults = computed(() => results.value.filter(r => selectedIds.value.has(r.id)
+  && (!isApi || contextResult.value?.included_memory_ids.includes(r.id))))
+const explanations = computed(() => isApi
+  ? results.value.map((result, index) => ({
+      seq: index + 1,
+      ways: [result.reasonCodes?.includes('KEYWORD_MATCH') && '关键词匹配',
+        result.reasonCodes?.includes('VECTOR_MATCH') && '向量相似'].filter(Boolean),
+      text: result.reasonCodes?.join('、') || '', target: index + 1
+    }))
+  : MATCH_EXPLAIN)
 
-const totalTokens = computed(() => selectedResults.value.reduce((s, r) => s + r.tokens, 0))
+const totalTokens = computed(() => isApi
+  ? (contextResult.value?.budget.used_tokens || 0)
+  : selectedResults.value.reduce((s, r) => s + r.tokens, 0))
+
+async function refreshContext() {
+  if (!isApi || !searched.value) return
+  try {
+    contextResult.value = await assembleContext([...selectedIds.value], tokenBudget.value)
+  } catch (error) {
+    contextResult.value = null
+    searchError.value = `组装上下文失败：${error.message}`
+  }
+}
+
+watch([selectedIds, tokenBudget], refreshContext)
 
 function toggleResult(id) {
   const s = new Set(selectedIds.value)
@@ -31,17 +79,48 @@ function toggleResult(id) {
   selectedIds.value = s
 }
 
-function doSearch() {
+async function doSearch() {
+  if (isApi) {
+    if (!question.value.trim()) { searchError.value = '请输入要检索的问题'; return }
+    if (!vectorEnabled && searchMode.value !== '关键词') { searchError.value = '尚未配置向量基线，请先使用关键词检索'; return }
+    loading.value = true
+    searchError.value = ''
+    try {
+      const filters = {}
+      if (sourcePlatform.value !== '全部') filters.platforms = [platformValues[sourcePlatform.value]]
+      if (category.value !== '全部') filters.kinds = [kindValues[category.value]]
+      if (conversation.value.trim()) filters.conversation_ids = [conversation.value.trim()]
+      apiResult.value = await searchMemories(question.value.trim(), {
+        filters, budget_tokens: tokenBudget.value, mode: modeValues[searchMode.value]
+      })
+      selectedIds.value = new Set(apiResult.value.items.filter(item => item.selected_form).map(item => item.memory.id))
+      searched.value = true
+      await refreshContext()
+    } catch (error) {
+      searchError.value = `检索失败：${error.message}`
+      searched.value = false
+    } finally { loading.value = false }
+    return
+  }
   searched.value = false
   setTimeout(() => { searched.value = true }, 400)
 }
 
-function copyContext() {
-  const text = selectedResults.value
+function openSource(result) {
+  if (result.conversationId && result.messageId) {
+    router.push({ path: '/archive', query: { conversation: result.conversationId, message: result.messageId } })
+  }
+}
+
+async function copyContext() {
+  if (isApi && !contextResult.value) return
+  const text = isApi ? contextResult.value.context_text : selectedResults.value
     .map(r => `[${r.category}] ${r.title}\n${r.content || r.desc}\n来源：${r.conversation} · ${r.time}`)
     .join('\n\n')
-  navigator.clipboard?.writeText(text).catch(() => {})
-  store.showToast('上下文已复制到剪贴板')
+  try {
+    await navigator.clipboard.writeText(text)
+    store.showToast('上下文已复制到剪贴板')
+  } catch { store.showToast('复制失败，请检查浏览器剪贴板权限') }
 }
 </script>
 
@@ -50,7 +129,10 @@ function copyContext() {
     <div class="page-head">
       <h1>记忆检索</h1>
       <p class="sub">按问题和来源范围找回已确认的记忆。</p>
+      <p v-if="isApi" class="sub">实际检索方式：{{ apiResult?.mode_used || '尚未检索' }}。向量基线需在后端启用并回填已有记忆。</p>
     </div>
+    <p v-if="searchError" class="api-error" role="alert">{{ searchError }}</p>
+    <p v-if="loading" class="api-loading">正在检索…</p>
 
     <!-- 搜索区 -->
     <div class="search-row">
@@ -73,6 +155,7 @@ function copyContext() {
         <div class="select-wrap with-badge">
           <SourceBadge :source="sourcePlatform" :size="17" />
           <select v-model="sourcePlatform">
+            <option v-if="isApi">全部</option>
             <option>DeepSeek</option>
             <option>Kimi</option>
             <option>豆包</option>
@@ -85,11 +168,12 @@ function copyContext() {
       <div class="filter-item">
         <label>对话：</label>
         <div class="select-wrap">
-          <select v-model="conversation">
+          <select v-if="!isApi" v-model="conversation">
             <option>初赛部署讨论</option>
             <option>需求评审会议</option>
             <option>产品文案优化</option>
           </select>
+          <input v-if="isApi" v-model="conversation" class="conversation-id" placeholder="可填对话 ID" />
           <span class="select-chev"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></span>
         </div>
       </div>
@@ -99,10 +183,13 @@ function copyContext() {
         <div class="select-wrap with-badge">
           <CategoryTag :category="category" />
           <select v-model="category">
+            <option v-if="isApi">全部</option>
             <option>决策</option>
-            <option>行动</option>
+            <option v-if="!isApi">行动</option>
             <option>约束</option>
             <option>事实</option>
+            <option v-if="isApi">偏好</option>
+            <option v-if="isApi">技能</option>
           </select>
           <span class="select-chev"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></span>
         </div>
@@ -112,7 +199,7 @@ function copyContext() {
         <label>检索方式：</label>
         <div class="mode-tabs">
           <button
-            v-for="m in ['混合', '关键词', '向量']"
+            v-for="m in (isApi && !vectorEnabled ? ['关键词'] : ['混合', '关键词', '向量'])"
             :key="m"
             class="mode-tab"
             :class="{ active: searchMode === m }"
@@ -172,10 +259,11 @@ function copyContext() {
                 </span>
               </div>
               <blockquote class="result-quote">{{ r.quote }}</blockquote>
+              <button v-if="isApi && r.messageId" class="source-link" @click="openSource(r)">查看原消息</button>
             </div>
           </div>
 
-          <div v-if="!results.length" class="empty">点击"查找记忆"开始检索。</div>
+          <div v-if="!results.length && !loading && !searchError" class="empty">{{ searched ? '当前范围没有命中的已确认记忆。' : '点击“查找记忆”开始检索。' }}</div>
         </div>
       </section>
 
@@ -208,6 +296,9 @@ function copyContext() {
           </div>
 
           <div v-if="!selectedResults.length" class="empty">从左侧结果中勾选要使用的记忆。</div>
+          <p v-if="isApi && contextResult?.excluded.length" class="api-error">
+            {{ contextResult.excluded.length }} 条记忆因预算不足被跳过；完整出处不会截断。
+          </p>
 
           <div class="token-row">
             <span class="token-label">
@@ -217,7 +308,7 @@ function copyContext() {
             <span class="token-value">约 {{ totalTokens }} tokens</span>
           </div>
 
-          <button class="copy-btn" :disabled="!selectedResults.length" @click="copyContext">
+          <button class="copy-btn" :disabled="!selectedResults.length || (isApi && !contextResult?.context_text)" @click="copyContext">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
             复制上下文
           </button>
@@ -234,7 +325,7 @@ function copyContext() {
         <h3>为什么找到这些记忆</h3>
       </div>
       <div class="explain-list">
-        <div v-for="e in MATCH_EXPLAIN" :key="e.seq" class="explain-row">
+        <div v-for="e in explanations" :key="e.seq" class="explain-row">
           <span class="e-seq">{{ e.seq }}</span>
           <span class="e-ways">
             <span v-for="w in e.ways" :key="w" class="way-tag" :class="{ kw: w === '关键词匹配', vec: w === '向量相似' }">{{ w }}</span>
@@ -544,4 +635,8 @@ function copyContext() {
   font-size: 13px;
   color: var(--text-tertiary);
 }
+.api-error { color: #b91c1c; margin-top: 12px; }
+.api-loading { color: var(--text-secondary); margin-top: 12px; }
+.conversation-id { width: 130px; border: 1px solid var(--border-strong); border-radius: 8px; padding: 8px; font-size: 13px; }
+.source-link { color: var(--primary); font-size: 12px; margin-top: 8px; }
 </style>

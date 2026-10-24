@@ -5,7 +5,7 @@ const route = useRoute()
 
 const navItems = [
   { key: 'archive', label: '对话档案', to: '/archive', icon: 'chat' },
-  { key: 'memory', label: '记忆库', to: '/recall', icon: 'db' },
+  { key: 'memory', label: '记忆库', to: '/memories', icon: 'db' },
   { key: 'search', label: '记忆检索', to: '/search', icon: 'search' },
   { key: 'recall', label: '召回记录', to: '/recall', icon: 'shield' },
   { key: 'versions', label: '版本与冲突', to: '/versions', icon: 'loop' }
