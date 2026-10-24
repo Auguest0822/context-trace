@@ -39,6 +39,13 @@ function goBack() {
   router.push('/archive')
 }
 
+function openSource(memory) {
+  router.push({ path: '/archive', query: {
+    conversation: memory.conversation_id,
+    message: memory.source_message_ids[0]
+  } })
+}
+
 async function loadPreview() {
   if (!store.selectedConversationId || !selectedMessages.value.length) {
     errorText.value = '请返回对话档案，先选择 1–20 条消息。'
@@ -165,6 +172,7 @@ async function confirmSave() {
         <strong>记忆 #{{ memory.id }} · {{ kindLabels[memory.kind] }}</strong>
         <p>{{ memory.content }}</p>
         <small>原始消息 {{ memory.source_message_ids.map(id => '#' + id).join('、') }} · 原文：“{{ memory.source_excerpt }}”</small>
+        <button class="source-link" @click="openSource(memory)">查看原消息</button>
       </div>
     </div>
 
@@ -428,4 +436,5 @@ async function confirmSave() {
 .saved-item { background: #fff; border: 1px solid var(--border); border-radius: 8px; padding: 12px 14px; font-size: 13px; }
 .saved-item p { margin: 6px 0; white-space: pre-wrap; }
 .saved-item small { color: var(--text-secondary); white-space: pre-wrap; }
+.source-link { display: block; margin-top: 8px; padding: 0; border: 0; background: none; color: var(--primary); cursor: pointer; font-size: 12px; font-weight: 600; }
 </style>

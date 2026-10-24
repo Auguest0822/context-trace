@@ -1,12 +1,13 @@
 <script setup>
-import { ref, computed, onMounted, onUnmounted } from 'vue'
-import { useRouter } from 'vue-router'
+import { ref, computed, nextTick, onMounted, onUnmounted } from 'vue'
+import { useRouter, useRoute } from 'vue-router'
 import { store } from '../store'
 import { CONVERSATIONS, MESSAGES, FILTERS } from '../data/mock'
 import { loadConversations, loadConversationDetail, loadMessages } from '../data/archiveApi'
 import SourceBadge from '../components/SourceBadge.vue'
 
 const router = useRouter()
+const route = useRoute()
 const isApiArchive = import.meta.env.VITE_ARCHIVE_DATA_SOURCE === 'api'
 const apiConfig = {
   baseUrl: import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000',
@@ -89,10 +90,20 @@ async function refreshArchive() {
     const items = await loadConversations(apiConfig)
     store.archiveStatus = 'ready'
     conversations.value = items
-    const nextId = items.some(c => c.id === activeConvId.value)
-      ? activeConvId.value : items[0]?.id ?? null
+    const linkedConversationId = typeof route.query.conversation === 'string'
+      ? route.query.conversation : null
+    const nextId = items.some(c => c.id === linkedConversationId)
+      ? linkedConversationId
+      : items.some(c => c.id === activeConvId.value)
+        ? activeConvId.value : items[0]?.id ?? null
     activeConvId.value = nextId
-    if (nextId !== null) await selectConversation(nextId)
+    if (nextId !== null) {
+      await selectConversation(nextId)
+      if (route.query.message) {
+        await nextTick()
+        document.getElementById(`archive-message-${route.query.message}`)?.scrollIntoView({ block: 'center' })
+      }
+    }
     else {
       apiMessages.value = []
       selectedMsgIds.value = new Set()
@@ -247,7 +258,7 @@ function extractMemory() {
             <button @click="selectConversation(activeConvId)">重试</button>
           </div>
           <p v-else-if="!currentMessages.length" class="archive-state">这段对话没有消息</p>
-          <div v-for="m in currentMessages" :key="m.id" class="msg-row">
+          <div v-for="m in currentMessages" :id="isApiArchive ? `archive-message-${m.id}` : undefined" :key="m.id" class="msg-row" :class="{ 'source-highlight': isApiArchive && String(m.id) === String(route.query.message) }">
             <div class="msg-side">
               <span
                 class="checkbox"
@@ -289,6 +300,7 @@ function extractMemory() {
 </template>
 
 <style scoped>
+.source-highlight { outline: 2px solid var(--primary); outline-offset: -2px; border-radius: 10px; }
 .page-head h1 { font-size: 22px; font-weight: 700; }
 .page-head .sub { margin-top: 6px; font-size: 13.5px; color: var(--text-secondary); }
 
